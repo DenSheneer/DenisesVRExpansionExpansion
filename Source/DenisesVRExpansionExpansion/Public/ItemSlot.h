@@ -44,6 +44,7 @@ protected:
 
 
 public:
+	bool checkCompatibility(ASlotableActor* actor);
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void ReceiveSlotableActor(ASlotableActor* actor);
 	virtual void RemoveSlotableActor(ASlotableActor* actor);

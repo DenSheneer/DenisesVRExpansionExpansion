@@ -134,6 +134,16 @@ void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 		SetVisibility(false);
 }
 
+bool UItemSlot::checkCompatibility(ASlotableActor* actor)
+{
+	int index = acceptedActors.IndexOfByKey(actor->GetClass());
+	if (index != INDEX_NONE)
+	{
+		return true;
+	}
+	return false;
+}
+
 // Called every frame
 void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {

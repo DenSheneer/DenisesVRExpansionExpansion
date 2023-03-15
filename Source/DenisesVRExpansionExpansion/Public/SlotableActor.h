@@ -41,7 +41,8 @@ protected:
 	virtual void OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		TArray<UItemSlot*> currentAvailableSlots;
+		TArray<UItemSlot*> currentlyAvailable_Slots;
+		TArray<UItemSlot*> subscribedTo_Slots;
 
 	UFUNCTION(BlueprintCallable)
 		void manualFindAvailableSlotsCall();
@@ -58,7 +59,7 @@ private:
 	void setupColliderRef();
 	void removeSlotFromList(UItemSlot* slotToRemove);
 	void addSlotToList(UItemSlot* slotToAdd);
-	void resetGrippedParameters();
+	void reset_GrippingParameters();
 	USphereComponent* triggerComponent;
 	UItemSlot* findNearestSlot(TArray<UItemSlot*> slotsToCheck);
 	UItemSlot* currentNearestSlot;
