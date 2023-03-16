@@ -19,8 +19,8 @@ void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* Gripp
 
 	if (currentGripState == EItemGripState::slotted)
 	{
-		currentSlot->RemoveSlotableActor(this);
-		currentSlot = nullptr;
+		current_ResidingSlot->RemoveSlotableActor(this);
+		current_ResidingSlot = nullptr;
 	}
 	currentGripState = EItemGripState::gripped;
 	currentGrippingController = GrippingController;
@@ -35,7 +35,7 @@ void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent
 		unsubscribeFromOccupiedEvent(nearestSlot);
 		nearestSlot->ReceiveSlotableActor(this);
 
-		currentSlot = nearestSlot;
+		current_ResidingSlot = nearestSlot;
 		currentGripState = EItemGripState::slotted;
 
 		this->SetActorLocationAndRotation(nearestSlot->GetComponentLocation(), nearestSlot->GetComponentRotation());
@@ -53,20 +53,16 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 	TArray<UPrimitiveComponent*> overlappingComponents;
 	triggerComponent->GetOverlappingComponents(overlappingComponents);
 
-	for (int i = 0; i < overlappingComponents.Num(); i++)
+	int nrOfOverlaps = overlappingComponents.Num();
+	if (nrOfOverlaps > 0)
 	{
-		auto itemSlot = Cast<UItemSlot>(overlappingComponents[i]);
-		if (itemSlot != nullptr && itemSlot->checkCompatibility(this))
+		for (int i = 0; i < nrOfOverlaps; i++)
 		{
-			if (!itemSlot->IsOccupied())
-				currentlyAvailable_Slots.Add(itemSlot);
-			else
-			{
-				subscribeToSlotAvailableEvent(itemSlot);
-			}
+			auto itemSlot = Cast<UItemSlot>(overlappingComponents[i]);
+			handleSlotOverlap(itemSlot, true);
 		}
+		refreshNearestSlot();
 	}
-	refreshNearestSlot();
 }
 void ASlotableActor::refreshNearestSlot()
 {
@@ -117,15 +113,7 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
-	if (currentGripState == EItemGripState::gripped)
-	{
-		auto itemSlot = Cast<UItemSlot>(otherComponent);
-		if (itemSlot != nullptr && itemSlot->checkCompatibility(this))
-			if (!itemSlot->IsOccupied())
-				addSlotToList(itemSlot);
-			else
-				subscribeToSlotAvailableEvent(itemSlot);
-	}
+	handleSlotOverlap(Cast<UItemSlot>(otherComponent));
 }
 void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
 {
@@ -139,6 +127,21 @@ void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
 void ASlotableActor::setupColliderRef()
 {
 	triggerComponent = FindComponentByClass<USphereComponent>();
+}
+
+void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefreshFlag)
+{
+	if (overlappingSlot != nullptr)
+	{
+		if (currentGripState == EItemGripState::gripped)
+		{
+			if (overlappingSlot != nullptr && overlappingSlot->checkCompatibility(this))
+				if (!overlappingSlot->IsOccupied())
+					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
+				else
+					subscribeToSlotAvailableEvent(overlappingSlot);
+		}
+	}
 }
 
 void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
@@ -158,7 +161,7 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 	}
 }
 
-void ASlotableActor::addSlotToList(UItemSlot* slotToAdd)
+void ASlotableActor::addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh)
 {
 	if (slotToAdd != nullptr)
 	{
@@ -166,7 +169,8 @@ void ASlotableActor::addSlotToList(UItemSlot* slotToAdd)
 		{
 			currentlyAvailable_Slots.Add(slotToAdd);
 		}
-		refreshNearestSlot();
+		if (!skipNearestRefresh)
+			refreshNearestSlot();
 	}
 }
 
