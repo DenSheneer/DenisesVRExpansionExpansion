@@ -15,7 +15,6 @@
  */
 
 UCLASS()
-//class DENISESVREXPANSIONEXPANSION_API ASlotableActor : public AGrippableActor
 class ASlotableActor : public AGrippableActor
 {
 	GENERATED_BODY()
@@ -31,8 +30,11 @@ protected:
 		TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
 		UGripMotionControllerComponent* currentGrippingController = nullptr;
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-		UItemSlot* currentSlot = nullptr;
+
+	UItemSlot* current_ResidingSlot = nullptr;
+	UItemSlot* currentNearestSlot;
+	TArray<UItemSlot*> currentlyAvailable_Slots;
+	TArray<UItemSlot*> subscribedTo_Slots;
 
 	virtual void BeginPlay() override;
 	virtual void Tick(float deltaSeconds) override;
@@ -40,28 +42,19 @@ protected:
 	virtual void OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed = false) override;
 	virtual void OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation) override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		TArray<UItemSlot*> currentAvailableSlots;
-
-	UFUNCTION(BlueprintCallable)
-		void manualFindAvailableSlotsCall();
-
-	UFUNCTION(BlueprintCallable)
-		void refreshNearestSlot();
-
-	UFUNCTION(BlueprintCallable)
-		void ComponentOverlapBegin(UActorComponent* otherComponent);
-	UFUNCTION(BlueprintCallable)
-		void ComponentOverlapEnd(UActorComponent* otherComponent);
+	UFUNCTION(Blueprintcallable) void ComponentOverlapBegin(UActorComponent* otherComponent);
+	UFUNCTION(Blueprintcallable) void ComponentOverlapEnd(UActorComponent* otherComponent);
 
 private:
 	void setupColliderRef();
+	void manualFindAvailableSlotsCall();
+	void refreshNearestSlot();
+	void handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefresh = false);
 	void removeSlotFromList(UItemSlot* slotToRemove);
-	void addSlotToList(UItemSlot* slotToAdd);
-	void resetGrippedParameters();
-	USphereComponent* triggerComponent;
+	void addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh = false);
+	void reset_GrippingParameters();
 	UItemSlot* findNearestSlot(TArray<UItemSlot*> slotsToCheck);
-	UItemSlot* currentNearestSlot;
+	USphereComponent* triggerComponent;
 
 	//	availability events
 	FDelegateHandle OccupiedEventHandle;

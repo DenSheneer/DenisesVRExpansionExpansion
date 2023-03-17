@@ -10,7 +10,7 @@ void ASlotableActor::BeginPlay()
 }
 void ASlotableActor::Tick(float deltaSeconds)
 {
-	if (currentAvailableSlots.Num() > 1 && currentGripState == EItemGripState::gripped)
+	if (currentlyAvailable_Slots.Num() > 1 && currentGripState == EItemGripState::gripped)
 		refreshNearestSlot();
 }
 
@@ -19,8 +19,8 @@ void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* Gripp
 
 	if (currentGripState == EItemGripState::slotted)
 	{
-		currentSlot->RemoveSlotableActor(this);
-		currentSlot = nullptr;
+		current_ResidingSlot->RemoveSlotableActor(this);
+		current_ResidingSlot = nullptr;
 	}
 	currentGripState = EItemGripState::gripped;
 	currentGrippingController = GrippingController;
@@ -35,48 +35,44 @@ void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent
 		unsubscribeFromOccupiedEvent(nearestSlot);
 		nearestSlot->ReceiveSlotableActor(this);
 
-		currentSlot = nearestSlot;
+		current_ResidingSlot = nearestSlot;
 		currentGripState = EItemGripState::slotted;
 
 		this->SetActorLocationAndRotation(nearestSlot->GetComponentLocation(), nearestSlot->GetComponentRotation());
-		this->DisableComponentsSimulatePhysics();
 		this->DisableComponentsSimulatePhysics();
 	}
 	else
 		currentGripState = EItemGripState::loose;
 
-	resetGrippedParameters();
+	reset_GrippingParameters();
 }
 
 void ASlotableActor::manualFindAvailableSlotsCall()
 {
-	currentAvailableSlots.Empty();
+	currentlyAvailable_Slots.Empty();
 	TArray<UPrimitiveComponent*> overlappingComponents;
 	triggerComponent->GetOverlappingComponents(overlappingComponents);
 
-	for (int i = 0; i < overlappingComponents.Num(); i++)
+	int nrOfOverlaps = overlappingComponents.Num();
+	if (nrOfOverlaps > 0)
 	{
-		auto itemSlot = Cast<UItemSlot>(overlappingComponents[i]);
-		if (itemSlot != nullptr)
+		for (int i = 0; i < nrOfOverlaps; i++)
 		{
-			if (!itemSlot->IsOccupied())
-				currentAvailableSlots.Add(itemSlot);
-			else
-				subscribeToSlotAvailableEvent(itemSlot);
+			auto itemSlot = Cast<UItemSlot>(overlappingComponents[i]);
+			handleSlotOverlap(itemSlot, true);
 		}
+		refreshNearestSlot();
 	}
-	refreshNearestSlot();
 }
 void ASlotableActor::refreshNearestSlot()
 {
-	UItemSlot* newNearest = findNearestSlot(currentAvailableSlots);
+	UItemSlot* newNearest = findNearestSlot(currentlyAvailable_Slots);
 	if (newNearest != currentNearestSlot)
 	{
 		if (currentNearestSlot != nullptr)
 		{
 			currentNearestSlot->ActorOutOfRangeEvent(this);
 			unsubscribeFromOccupiedEvent(currentNearestSlot);
-			unsubscribeFromAvailableEvent(currentNearestSlot);
 		}
 
 		if (newNearest != nullptr)
@@ -117,15 +113,7 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
-	if (currentGripState == EItemGripState::gripped)
-	{
-		auto itemSlot = Cast<UItemSlot>(otherComponent);
-		if (itemSlot != nullptr)
-			if (!itemSlot->IsOccupied())
-				addSlotToList(itemSlot);
-			else
-				subscribeToSlotAvailableEvent(itemSlot);
-	}
+	handleSlotOverlap(Cast<UItemSlot>(otherComponent));
 }
 void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
 {
@@ -141,36 +129,58 @@ void ASlotableActor::setupColliderRef()
 	triggerComponent = FindComponentByClass<USphereComponent>();
 }
 
+void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefreshFlag)
+{
+	if (overlappingSlot != nullptr)
+	{
+		if (currentGripState == EItemGripState::gripped)
+		{
+			if (overlappingSlot != nullptr && overlappingSlot->checkCompatibility(this))
+				if (!overlappingSlot->IsOccupied())
+					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
+				else
+					subscribeToSlotAvailableEvent(overlappingSlot);
+		}
+	}
+}
+
 void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 {
 	if (slotToRemove != nullptr)
 	{
-		if (currentAvailableSlots.Contains(slotToRemove))
+		if (currentlyAvailable_Slots.Contains(slotToRemove))
 		{
-			currentAvailableSlots.Remove(slotToRemove);
+			currentlyAvailable_Slots.Remove(slotToRemove);
+		}
+		if (subscribedTo_Slots.Contains(slotToRemove))
+		{
+			unsubscribeFromAvailableEvent(slotToRemove);
 		}
 		if (slotToRemove == currentNearestSlot)
 			refreshNearestSlot();
 	}
 }
 
-void ASlotableActor::addSlotToList(UItemSlot* slotToAdd)
+void ASlotableActor::addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh)
 {
 	if (slotToAdd != nullptr)
 	{
-		if (!currentAvailableSlots.Contains(slotToAdd))
+		if (!currentlyAvailable_Slots.Contains(slotToAdd))
 		{
-			currentAvailableSlots.Add(slotToAdd);
+			currentlyAvailable_Slots.Add(slotToAdd);
 		}
-		refreshNearestSlot();
+		if (!skipNearestRefresh)
+			refreshNearestSlot();
 	}
 }
 
-void ASlotableActor::resetGrippedParameters()
+void ASlotableActor::reset_GrippingParameters()
 {
 	currentGrippingController = nullptr;
-	currentAvailableSlots.Empty();
+	currentlyAvailable_Slots.Empty();
 	currentNearestSlot = nullptr;
+	for (int i = 0; i < subscribedTo_Slots.Num(); i++)
+		unsubscribeFromAvailableEvent(subscribedTo_Slots[i]);
 }
 
 void ASlotableActor::subscribeToSlotOccupiedEvent(UItemSlot* slot)
@@ -192,16 +202,24 @@ void ASlotableActor::unsubscribeFromOccupiedEvent(UItemSlot* slot)
 
 void ASlotableActor::subscribeToSlotAvailableEvent(UItemSlot* slot)
 {
+	subscribedTo_Slots.Add(slot);
 	AvailableEventHandle = slot->OnAvailableEvent.AddLambda([this](UItemSlot* pSlot)
 		{
 			this->addSlotToList(pSlot);
 			unsubscribeFromAvailableEvent(pSlot);
+			subscribedTo_Slots.Remove(pSlot);
 		}
 	);
 }
 
 void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 {
-	if (slot->OnAvailableEvent.Remove(AvailableEventHandle))
-		AvailableEventHandle.Reset();
+	if (subscribedTo_Slots.Contains(slot))
+	{
+		if (slot->OnAvailableEvent.Remove(AvailableEventHandle))
+		{
+			AvailableEventHandle.Reset();
+			subscribedTo_Slots.Remove(slot);
+		}
+	}
 }
