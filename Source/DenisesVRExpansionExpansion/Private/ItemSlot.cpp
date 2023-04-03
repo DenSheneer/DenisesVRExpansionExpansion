@@ -122,6 +122,9 @@ void UItemSlot::ActorInRangeEvent(ASlotableActor* actor)
 		if (visualsArray.Contains(index))
 			SetPreviewVisuals(visualsArray[index]);
 
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, TEXT("received inrange event from ") + actor->GetName());
+
 		actorsInRange++;
 		SetVisibility(true);
 	}
@@ -130,6 +133,10 @@ void UItemSlot::ActorInRangeEvent(ASlotableActor* actor)
 void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 {
 	actorsInRange--;
+
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, FString::Printf(TEXT("received out of range event %d"), actorsInRange));
+
 	if (actorsInRange < 1)
 		SetVisibility(false);
 }
