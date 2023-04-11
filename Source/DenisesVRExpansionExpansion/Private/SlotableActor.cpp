@@ -39,7 +39,7 @@ void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent
 		currentGripState = EItemGripState::slotted;
 
 		this->SetActorLocationAndRotation(nearestSlot->GetComponentLocation(), nearestSlot->GetComponentRotation());
-		//this->DisableComponentsSimulatePhysics();
+		this->DisableComponentsSimulatePhysics();
 	}
 	else
 		currentGripState = EItemGripState::loose;

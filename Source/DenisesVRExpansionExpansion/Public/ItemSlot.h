@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SphereComponent.h"
 #include "SlotableActorVisuals.h"
 #include "ItemSlot.generated.h"
 
@@ -25,17 +26,16 @@ protected:
 	virtual void BeginPlay() override;
 
 	//	editor functions
-	UFUNCTION(CallInEditor, Category = "Preview Visuals | Load and Save")
-		void ReloadVisuals();
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals | Load and Save")
-		TMap<int, FSlotableActorVisuals> visualsArray;
-	UFUNCTION(CallInEditor, Category = "Preview Visuals | Load and Save")
-		void SavePreviewPosAndRot();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals | Controls")
+	UFUNCTION(CallInEditor,						Category = "Preview Visuals", meta=(DisplayPriority = "0"))
 		void CycleThroughPreviews();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals | Controls")
+	UFUNCTION(CallInEditor,						Category = "Preview Visuals", meta=(DisplayPriority = "1"))
 		void TogglePreviewVisibility();
+	UFUNCTION(CallInEditor,						Category = "Preview Visuals", meta=(DisplayPriority = "2"))
+		void ReloadVisuals();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta=(DisplayPriority = "3"))
+		TMap<int, FSlotableActorVisuals> visualsArray;
 
+	void SavePreviewPosAndRot();
 	void SetPreviewVisuals(FSlotableActorVisuals visualProperties);
 
 
@@ -46,6 +46,13 @@ protected:
 public:
 	bool checkCompatibility(ASlotableActor* actor);
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void PostEditComponentMove(bool bFinished) override;
+	virtual void PostEditUndo(TSharedPtr<ITransactionObjectAnnotation> TransactionAnnotation) override;
+#endif
+
 	virtual void ReceiveSlotableActor(ASlotableActor* actor);
 	virtual void RemoveSlotableActor(ASlotableActor* actor);
 	bool IsOccupied() { return isOccupied; }
@@ -64,4 +71,5 @@ public:
 
 private:
 	int currentVisualIndex = 0;
+	USphereComponent* triggerShape;
 };

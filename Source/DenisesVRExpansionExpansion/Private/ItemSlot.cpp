@@ -3,6 +3,8 @@
 
 #include "ItemSlot.h"
 #include "SlotableActor.h"
+#include <Editor.h>
+#include "Kismet/KismetMathLibrary.h"
 
 // Sets default values for this component's properties
 UItemSlot::UItemSlot()
@@ -10,6 +12,7 @@ UItemSlot::UItemSlot()
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
+	this->bSelectable = true;
 
 	// ...
 }
@@ -55,6 +58,9 @@ void UItemSlot::SavePreviewPosAndRot()
 {
 	visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
 	visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
+
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("Saved."));
 }
 
 void UItemSlot::TogglePreviewVisibility()
@@ -97,7 +103,13 @@ void UItemSlot::ReceiveSlotableActor(ASlotableActor* actor)
 {
 	if (actor != nullptr)
 	{
-		actorsInRange = 0;
+		int index = acceptedActors.IndexOfByKey(actor->GetClass());
+		if (index != INDEX_NONE)
+		{
+			if (visualsArray.Contains(index))
+				SetPreviewVisuals(visualsArray[index]);
+		}
+
 		SetVisibility(false);
 		isOccupied = true;
 		OnOccupiedEvent.Broadcast(this);
@@ -158,3 +170,30 @@ void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompon
 
 	// ...
 }
+void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	SavePreviewPosAndRot();
+
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+
+void UItemSlot::PostEditComponentMove(bool bFinished)
+{
+	if (bFinished)
+	{
+		SavePreviewPosAndRot();
+	}
+	Super::PostEditComponentMove(bFinished);
+}
+
+void UItemSlot::PostEditUndo(TSharedPtr<ITransactionObjectAnnotation> TransactionAnnotation)
+{
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan, TEXT("Called."));
+
+	SavePreviewPosAndRot();
+
+	Super::PostEditUndo();
+}
+
+
