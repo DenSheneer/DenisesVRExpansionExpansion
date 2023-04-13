@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "SlotableActorVisuals.h"
+#include "ItemSlotState.h"
 #include "ItemSlot.generated.h"
 
 class ASlotableActor;
@@ -20,19 +21,31 @@ public:
 	UItemSlot();
 
 protected:
-	bool isOccupied = false;
-	int actorsInRange = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+		TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+		AActor* reservedForActor;
 
 	virtual void BeginPlay() override;
 
 	//	editor functions
-	UFUNCTION(CallInEditor,						Category = "Preview Visuals", meta=(DisplayPriority = "0"))
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "0"))
 		void CycleThroughPreviews();
-	UFUNCTION(CallInEditor,						Category = "Preview Visuals", meta=(DisplayPriority = "1"))
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "1"))
 		void TogglePreviewVisibility();
-	UFUNCTION(CallInEditor,						Category = "Preview Visuals", meta=(DisplayPriority = "2"))
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "2"))
 		void ReloadVisuals();
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta=(DisplayPriority = "3"))
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "3"))
+		void EditTriggerShape();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "4"))
+		UMaterial* lefthandMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "5"))
+		UMaterial* rightHandMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "6"))
+		FSlotableActorVisuals triggerMesh;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "7"))
 		TMap<int, FSlotableActorVisuals> visualsArray;
 
 	void SavePreviewPosAndRot();
@@ -44,21 +57,20 @@ protected:
 
 
 public:
-	bool checkCompatibility(ASlotableActor* actor);
+	bool CheckForCompatibility(ASlotableActor* actor);
+	bool TryToReserve(ASlotableActor* actor, EControllerHand handSide);
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostEditComponentMove(bool bFinished) override;
-	virtual void PostEditUndo(TSharedPtr<ITransactionObjectAnnotation> TransactionAnnotation) override;
 #endif
 
-	virtual void ReceiveSlotableActor(ASlotableActor* actor);
-	virtual void RemoveSlotableActor(ASlotableActor* actor);
-	bool IsOccupied() { return isOccupied; }
+	bool TryToReceiveActor(ASlotableActor* actor);
+	void RemoveSlotableActor(ASlotableActor* actor);
+	const EItemSlotState SlotState() { return currentState; }
 
-	virtual void ActorInRangeEvent(ASlotableActor* actor);
-	virtual void ActorOutOfRangeEvent(ASlotableActor* actor);
+	void ActorOutOfRangeEvent(ASlotableActor* actor);
 
 	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)
 		FSlotOccupiedEvent& OnOccupied(UItemSlot*) { return OnOccupiedEvent; }
@@ -70,6 +82,7 @@ public:
 	FSlotAvailableEvent OnAvailableEvent;
 
 private:
+	virtual void reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide);
 	int currentVisualIndex = 0;
 	USphereComponent* triggerShape;
 };

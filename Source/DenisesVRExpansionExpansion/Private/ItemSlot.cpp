@@ -3,6 +3,7 @@
 
 #include "ItemSlot.h"
 #include "SlotableActor.h"
+#include "Components/SphereComponent.h"
 #include <Editor.h>
 #include "Kismet/KismetMathLibrary.h"
 
@@ -12,7 +13,6 @@ UItemSlot::UItemSlot()
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
-	this->bSelectable = true;
 
 	// ...
 }
@@ -22,6 +22,14 @@ void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
 	SetVisibility(false);
+
+	USphereComponent* trigger = NewObject<USphereComponent>(GetOwner(), FName(GetName() + "_trigger"));
+	trigger->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	trigger->RegisterComponent();
+	GetOwner()->AddInstanceComponent(trigger);
+	trigger->SetHiddenInGame(false);
+	trigger->SetVisibility(true);
+	trigger->SetSphereRadius(10.0f);
 }
 
 /// <summary>
@@ -42,7 +50,6 @@ void UItemSlot::ReloadVisuals()
 		gfx.Scale = obj->MeshScale;
 		gfx.RelativePosition = GetRelativeLocation();
 		gfx.RelativeRotation = GetRelativeRotation();
-		gfx.PreviewMaterial = LoadObject<UMaterial>(NULL, TEXT("/Script/Engine.Material'/Game/VRE/Core/Character/BasicShapeMaterialTrans.BasicShapeMaterialTrans'"));
 
 		visualsArray.Add(i, gfx);
 	}
@@ -54,13 +61,40 @@ void UItemSlot::ReloadVisuals()
 	}
 }
 
+void UItemSlot::EditTriggerShape()
+{
+	currentVisualIndex = -1;
+	SetVisibility(true);
+	SetPreviewVisuals(triggerMesh);
+}
+
+bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
+{
+	int index = acceptedActors.IndexOfByKey(actor->GetClass());
+	if (index != INDEX_NONE)
+	{
+		return true;
+	}
+	return false;
+}
+
 void UItemSlot::SavePreviewPosAndRot()
 {
-	visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
-	visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
+	if (currentVisualIndex == -1)
+	{
+		triggerMesh.RelativePosition = GetRelativeLocation();
+		triggerMesh.RelativeRotation = GetRelativeRotation();
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved trigger mesh"));
+	}
+	else if (visualsArray.Contains(currentVisualIndex))
+	{
+		visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
+		visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
+	}
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("Saved."));
 }
 
 void UItemSlot::TogglePreviewVisibility()
@@ -99,66 +133,79 @@ void UItemSlot::CycleThroughPreviews()
 	}
 }
 
-void UItemSlot::ReceiveSlotableActor(ASlotableActor* actor)
+bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
 {
-	if (actor != nullptr)
+	if (actor == reservedForActor)
 	{
-		int index = acceptedActors.IndexOfByKey(actor->GetClass());
-		if (index != INDEX_NONE)
-		{
-			if (visualsArray.Contains(index))
-				SetPreviewVisuals(visualsArray[index]);
-		}
-
+		actor->DisableComponentsSimulatePhysics();
+		actor->AttachToActor(this->GetOwner(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		actor->SetActorRelativeLocation(this->GetRelativeLocation());
+		actor->SetActorRelativeRotation(this->GetRelativeRotation());
 		SetVisibility(false);
-		isOccupied = true;
+		reservedForActor = nullptr;
+		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
+		return true;
 	}
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
+
+	return false;
 }
 
 void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 {
-	isOccupied = false;
+	currentState = EItemSlotState::available;
 	OnAvailableEvent.Broadcast(this);
-
-	//if (GEngine)
-	//	GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, TEXT("sent available broadcast"));
-
 }
 
-void UItemSlot::ActorInRangeEvent(ASlotableActor* actor)
+void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide)
 {
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
 	if (index != INDEX_NONE)
 	{
 		if (visualsArray.Contains(index))
+		{
 			SetPreviewVisuals(visualsArray[index]);
 
-		if (GEngine)
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, TEXT("received inrange event from ") + actor->GetName());
+			switch (handSide)
+			{
+			case EControllerHand::Left:
+				SetMaterial(0, lefthandMaterial);
+				break;
+			case EControllerHand::Right:
+				SetMaterial(0, rightHandMaterial);
+				break;
+			default:
+				break;
+			}
 
-		actorsInRange++;
+		}
+		reservedForActor = actor;
+		currentState = EItemSlotState::reserved;
 		SetVisibility(true);
 	}
 }
 
 void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 {
-	actorsInRange--;
+	currentState = EItemSlotState::available;
+	reservedForActor = nullptr;
+	SetVisibility(false);
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, FString::Printf(TEXT("received out of range event %d"), actorsInRange));
-
-	if (actorsInRange < 1)
-		SetVisibility(false);
+	OnAvailableEvent.Broadcast(this);
 }
 
-bool UItemSlot::checkCompatibility(ASlotableActor* actor)
+bool UItemSlot::TryToReserve(ASlotableActor* actor, EControllerHand handSide)
 {
-	int index = acceptedActors.IndexOfByKey(actor->GetClass());
-	if (index != INDEX_NONE)
+	if (currentState == EItemSlotState::available)
 	{
-		return true;
+		int index = acceptedActors.IndexOfByKey(actor->GetClass());
+		if (index != INDEX_NONE)
+		{
+			reserveSlotForActor(actor, handSide);
+			return true;
+		}
 	}
 	return false;
 }
@@ -180,20 +227,9 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 void UItemSlot::PostEditComponentMove(bool bFinished)
 {
 	if (bFinished)
-	{
 		SavePreviewPosAndRot();
-	}
+
 	Super::PostEditComponentMove(bFinished);
-}
-
-void UItemSlot::PostEditUndo(TSharedPtr<ITransactionObjectAnnotation> TransactionAnnotation)
-{
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan, TEXT("Called."));
-
-	SavePreviewPosAndRot();
-
-	Super::PostEditUndo();
 }
 
 

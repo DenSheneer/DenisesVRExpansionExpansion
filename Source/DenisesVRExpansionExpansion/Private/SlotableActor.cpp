@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "SlotableActor.h"
+#include "GripMotionControllerComponent.h"
 #include "ItemGripState.h"
 
 void ASlotableActor::BeginPlay()
@@ -33,13 +34,16 @@ void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent
 	if (nearestSlot != nullptr)
 	{
 		unsubscribeFromOccupiedEvent(nearestSlot);
-		nearestSlot->ReceiveSlotableActor(this);
+		if (nearestSlot->TryToReceiveActor(this))
+		{
+			//this->DisableComponentsSimulatePhysics();
+			current_ResidingSlot = nearestSlot;
+			currentGripState = EItemGripState::slotted;
 
-		current_ResidingSlot = nearestSlot;
-		currentGripState = EItemGripState::slotted;
-
-		this->SetActorLocationAndRotation(nearestSlot->GetComponentLocation(), nearestSlot->GetComponentRotation());
-		this->DisableComponentsSimulatePhysics();
+			//this->SetActorLocationAndRotation(nearestSlot->GetComponentLocation(), nearestSlot->GetComponentRotation());
+		}
+		else
+			currentGripState = EItemGripState::loose;
 	}
 	else
 		currentGripState = EItemGripState::loose;
@@ -77,8 +81,13 @@ void ASlotableActor::refreshNearestSlot()
 
 		if (newNearest != nullptr)
 		{
-			newNearest->ActorInRangeEvent(this);
-			subscribeToSlotOccupiedEvent(newNearest);
+			EControllerHand handSide;
+			if (currentGrippingController->MotionSource == "left")
+				handSide = EControllerHand::Left;
+			else
+				handSide = EControllerHand::Right;
+
+			newNearest->TryToReserve(this, handSide);
 		}
 		currentNearestSlot = newNearest;
 	}
@@ -113,14 +122,21 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
-	handleSlotOverlap(Cast<UItemSlot>(otherComponent));
+	auto cast = Cast<UShapeComponent>(otherComponent);
+	if (cast != nullptr)
+		handleSlotOverlap(Cast<UItemSlot>(cast->GetAttachParent()));
 }
 void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
 {
 	if (currentGripState == EItemGripState::gripped)
 	{
-		auto itemSlot = Cast<UItemSlot>(otherComponent);
-		removeSlotFromList(itemSlot);
+		auto cast = Cast<UShapeComponent>(otherComponent);
+		if (cast != nullptr)
+		{
+			auto itemSlot = Cast<UItemSlot>(cast->GetAttachParent());
+			if (itemSlot != nullptr)
+				removeSlotFromList(itemSlot);
+		}
 	}
 }
 
@@ -135,8 +151,8 @@ void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNear
 	{
 		if (currentGripState == EItemGripState::gripped)
 		{
-			if (overlappingSlot != nullptr && overlappingSlot->checkCompatibility(this))
-				if (!overlappingSlot->IsOccupied())
+			if (overlappingSlot != nullptr && overlappingSlot->CheckForCompatibility(this))
+				if (overlappingSlot->SlotState() == EItemSlotState::available)
 					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
 				else
 					subscribeToSlotAvailableEvent(overlappingSlot);
@@ -187,6 +203,7 @@ void ASlotableActor::subscribeToSlotOccupiedEvent(UItemSlot* slot)
 {
 	OccupiedEventHandle = slot->OnOccupiedEvent.AddLambda([this](UItemSlot* pSlot)
 		{
+
 			this->removeSlotFromList(pSlot);
 			subscribeToSlotAvailableEvent(pSlot);
 			unsubscribeFromOccupiedEvent(pSlot);
