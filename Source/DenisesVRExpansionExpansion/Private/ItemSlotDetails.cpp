@@ -10,18 +10,13 @@ TSharedRef<IDetailCustomization> ItemSlotDetails::MakeInstance()
 
 void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 {
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, (TEXT("this code ran")));
-
-	UE_LOG(LogTemp, Warning, TEXT("this code ran"));
-
-	IDetailCategoryBuilder& GeneralCategory = DetailLayout.EditCategory("Preview Visuals");
-	GeneralCategory.SetSortOrder(0);
-
+	IDetailCategoryBuilder& itemSlotcategory = DetailLayout.EditCategory("Item Slot editing");
+	itemSlotcategory.SetSortOrder(0);
 
 	// Add your custom function to the General category
-	TSharedRef<SWidget> FunctionWidget = SNew(SButton)
+	TSharedRef<SWidget> cyclePreviewButton = SNew(SButton)
 		.Text(FText::FromString("Cycle Through Previews"))
+		.ContentPadding(10.0f)
 		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
 			{
 				// Get a pointer to the actor component instance
@@ -41,5 +36,112 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				return FReply::Handled();
 			}));
 
-	GeneralCategory.AddCustomRow(FText::FromString("Cycle Through Previews")).WholeRowContent();
+	itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
+		.WholeRowContent()
+		[
+			cyclePreviewButton
+		];
+
+	//	--------------------
+
+		// Add your custom function to the General category
+	TSharedRef<SWidget> editTriggerShapeButton = SNew(SButton)
+		.Text(FText::FromString("Edit Preview Mesh"))
+		.ContentPadding(10.0f)
+		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+			{
+				// Get a pointer to the actor component instance
+				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+				if (SelectedObjects.Num() > 0)
+				{
+					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
+
+					// Call your function on the actor component
+					if (ActorComponent != nullptr)
+					{
+						ActorComponent->EditTriggerShape();
+					}
+				}
+
+				return FReply::Handled();
+			}));
+
+	itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
+		.WholeRowContent()
+		[
+			editTriggerShapeButton
+		];
+
+	//	--------------------
+
+			// Add your custom function to the General category
+	TSharedRef<SWidget> visibilityButton = SNew(SButton)
+		.Text(FText::FromString("Toggle Visuals Visibility"))
+		.ContentPadding(10.0f)
+		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+			{
+				// Get a pointer to the actor component instance
+				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+				if (SelectedObjects.Num() > 0)
+				{
+					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
+
+					// Call your function on the actor component
+					if (ActorComponent != nullptr)
+					{
+						ActorComponent->TogglePreviewVisibility();
+					}
+				}
+
+				return FReply::Handled();
+			}));
+
+	itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
+		.WholeRowContent()
+		[
+			visibilityButton
+		];
+
+	//	--------------------
+
+	// Adding a spacer
+	itemSlotcategory.AddCustomRow(FText::GetEmpty())
+		.WholeRowContent()
+		[
+			SNew(SBox)
+			.HeightOverride(10.0f)
+		];
+
+	//	--------------------
+
+				// Add your custom function to the General category
+	TSharedRef<SWidget> reloadButton = SNew(SButton)
+		.Text(FText::FromString("Reload Visuals"))
+		.ContentPadding(10.0f)
+		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+			{
+				// Get a pointer to the actor component instance
+				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+				if (SelectedObjects.Num() > 0)
+				{
+					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
+
+					// Call your function on the actor component
+					if (ActorComponent != nullptr)
+					{
+						ActorComponent->ReloadVisuals();
+					}
+				}
+
+				return FReply::Handled();
+			}));
+
+	itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
+		.WholeRowContent()
+		[
+			reloadButton
+		];
 }

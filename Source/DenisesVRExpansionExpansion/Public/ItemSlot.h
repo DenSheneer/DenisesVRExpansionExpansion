@@ -31,14 +31,14 @@ protected:
 
 	virtual void BeginPlay() override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "4"))
-		UMaterial* lefthandMaterial;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "5"))
-		UMaterial* rightHandMaterial;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "6"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
 		FSlotableActorVisuals triggerMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "7"))
-		TMap<int, FSlotableActorVisuals> visualsArray;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
+		UMaterial* lefthandMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
+		UMaterial* rightHandMaterial;
+
+	TMap<int, FSlotableActorVisuals> visualsArray;
 
 	void SaveMeshTransform();
 	void SetPreviewVisuals(FSlotableActorVisuals visualProperties);
@@ -49,14 +49,11 @@ protected:
 
 public:
 	//	editor functions
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "1"))
-		void CycleThroughPreviews();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "1"))
-		void TogglePreviewVisibility();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "2"))
-		void ReloadVisuals();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "3"))
-		void EditTriggerShape();
+	void CycleThroughPreviews();
+	void TogglePreviewVisibility();
+	void ReloadVisuals();
+	void EditTriggerShape();
+
 	bool CheckForCompatibility(ASlotableActor* actor);
 	bool TryToReserve(ASlotableActor* actor, EControllerHand handSide);
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
