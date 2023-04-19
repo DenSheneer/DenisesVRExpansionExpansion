@@ -6,7 +6,8 @@ public class DenisesVRExpansionExpansion : ModuleRules
 {
 	public DenisesVRExpansionExpansion(ReadOnlyTargetRules Target) : base(Target)
 	{
-		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		//PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		   PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
@@ -29,7 +30,7 @@ public class DenisesVRExpansionExpansion : ModuleRules
                     "NetCore",
                     "CoreUObject",
                     "Engine",
-					// "InputCore",
+					"InputCore",
                     "PhysicsCore",
                     //"FLEX", remove comment if building in the NVIDIA flex branch - NOTE when put in place FLEX only listed win32 and win64 at compatible platforms
                     "HeadMountedDisplay",
@@ -45,7 +46,11 @@ public class DenisesVRExpansionExpansion : ModuleRules
 
                     //"Renderer",
                     //"UtilityShaders,"
-					"VRExpansionPlugin"
+					"VRExpansionPlugin",
+					"Slate",
+					"SlateCore",
+					"PropertyEditor",
+					"UnrealEd"
 			}
 			);
 			

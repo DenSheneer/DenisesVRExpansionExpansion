@@ -7,6 +7,7 @@
 #include "Components/SphereComponent.h"
 #include "SlotableActorVisuals.h"
 #include "ItemSlotState.h"
+#include "DetailCategoryBuilder.h"
 #include "ItemSlot.generated.h"
 
 class ASlotableActor;
@@ -30,15 +31,6 @@ protected:
 
 	virtual void BeginPlay() override;
 
-	//	editor functions
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "0"))
-		void CycleThroughPreviews();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "1"))
-		void TogglePreviewVisibility();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "2"))
-		void ReloadVisuals();
-	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "3"))
-		void EditTriggerShape();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "4"))
 		UMaterial* lefthandMaterial;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "5"))
@@ -48,15 +40,23 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Preview Visuals", meta = (DisplayPriority = "7"))
 		TMap<int, FSlotableActorVisuals> visualsArray;
 
-	void SavePreviewPosAndRot();
+	void SaveMeshTransform();
 	void SetPreviewVisuals(FSlotableActorVisuals visualProperties);
 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Accepted actors")
 		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
 
-
 public:
+	//	editor functions
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "1"))
+		void CycleThroughPreviews();
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "1"))
+		void TogglePreviewVisibility();
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "2"))
+		void ReloadVisuals();
+	UFUNCTION(CallInEditor, Category = "Preview Visuals", meta = (DisplayPriority = "3"))
+		void EditTriggerShape();
 	bool CheckForCompatibility(ASlotableActor* actor);
 	bool TryToReserve(ASlotableActor* actor, EControllerHand handSide);
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -84,5 +84,4 @@ public:
 private:
 	virtual void reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide);
 	int currentVisualIndex = 0;
-	USphereComponent* triggerShape;
 };

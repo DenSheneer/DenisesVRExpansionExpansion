@@ -6,6 +6,7 @@
 #include "Components/SphereComponent.h"
 #include <Editor.h>
 #include "Kismet/KismetMathLibrary.h"
+#include "ItemSlotDetails.h"
 
 // Sets default values for this component's properties
 UItemSlot::UItemSlot()
@@ -23,13 +24,18 @@ void UItemSlot::BeginPlay()
 	Super::BeginPlay();
 	SetVisibility(false);
 
-	USphereComponent* trigger = NewObject<USphereComponent>(GetOwner(), FName(GetName() + "_trigger"));
+	SetPreviewVisuals(triggerMesh);
+	UStaticMeshComponent* trigger = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_trigger"));
+	trigger->SetStaticMesh(triggerMesh.Mesh);
+	trigger->SetMaterial(0, triggerMesh.PreviewMaterial);
+	trigger->SetWorldScale3D(triggerMesh.Scale);
+	trigger->SetWorldLocation(triggerMesh.RelativePosition);
+	trigger->SetRelativeRotation(triggerMesh.RelativeRotation);
 	trigger->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	trigger->RegisterComponent();
 	GetOwner()->AddInstanceComponent(trigger);
 	trigger->SetHiddenInGame(false);
 	trigger->SetVisibility(true);
-	trigger->SetSphereRadius(10.0f);
 }
 
 /// <summary>
@@ -78,23 +84,32 @@ bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
 	return false;
 }
 
-void UItemSlot::SavePreviewPosAndRot()
+void UItemSlot::SaveMeshTransform()
 {
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("saving index: %d"), currentVisualIndex));
+
 	if (currentVisualIndex == -1)
 	{
 		triggerMesh.RelativePosition = GetRelativeLocation();
 		triggerMesh.RelativeRotation = GetRelativeRotation();
+		triggerMesh.Scale = GetRelativeScale3D();
+
 		if (GEngine)
 			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved trigger mesh"));
 	}
-	else if (visualsArray.Contains(currentVisualIndex))
+	else if (currentVisualIndex >= 0)
 	{
-		visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
-		visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
-		if (GEngine)
-			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
-	}
+		if (visualsArray.Contains(currentVisualIndex))
+		{
+			visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
+			visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
+			visualsArray[currentVisualIndex].Scale = GetRelativeScale3D();
 
+			if (GEngine)
+				GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
+		}
+	}
 }
 
 void UItemSlot::TogglePreviewVisibility()
@@ -112,6 +127,9 @@ void UItemSlot::TogglePreviewVisibility()
 /// <param name="visualProperties"></param>
 void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 {
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("current index %d"), currentVisualIndex));
+
 	SetStaticMesh(visualProperties.Mesh);
 	SetWorldScale3D(visualProperties.Scale);
 	SetRelativeLocation(visualProperties.RelativePosition);
@@ -121,10 +139,16 @@ void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 
 void UItemSlot::CycleThroughPreviews()
 {
-	int maxIndex = visualsArray.Num();
-	if (maxIndex > 0)
+	if (currentVisualIndex < 0)
 	{
-		if (currentVisualIndex + 1 < maxIndex)
+		currentVisualIndex = 0;
+		SetPreviewVisuals(visualsArray[currentVisualIndex]);
+		return;
+	}
+
+	if (visualsArray.Num() > 0)
+	{
+		if (currentVisualIndex + 1 < visualsArray.Num())
 			currentVisualIndex++;
 		else
 			currentVisualIndex = 0;
@@ -219,7 +243,7 @@ void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompon
 }
 void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	SavePreviewPosAndRot();
+	SaveMeshTransform();
 
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
@@ -227,7 +251,7 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 void UItemSlot::PostEditComponentMove(bool bFinished)
 {
 	if (bFinished)
-		SavePreviewPosAndRot();
+		SaveMeshTransform();
 
 	Super::PostEditComponentMove(bFinished);
 }
