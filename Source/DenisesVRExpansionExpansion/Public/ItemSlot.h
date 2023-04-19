@@ -38,6 +38,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
 		UMaterial* rightHandMaterial;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing")
 	TMap<int, FSlotableActorVisuals> visualsArray;
 
 	void SaveMeshTransform();

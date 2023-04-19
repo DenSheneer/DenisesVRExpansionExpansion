@@ -17,7 +17,6 @@ void ASlotableActor::Tick(float deltaSeconds)
 
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
-
 	if (currentGripState == EItemGripState::slotted)
 	{
 		current_ResidingSlot->RemoveSlotableActor(this);
@@ -122,7 +121,7 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
-	auto cast = Cast<UShapeComponent>(otherComponent);
+	auto cast = Cast<UStaticMeshComponent>(otherComponent);
 	if (cast != nullptr)
 		handleSlotOverlap(Cast<UItemSlot>(cast->GetAttachParent()));
 }
@@ -130,7 +129,7 @@ void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
 {
 	if (currentGripState == EItemGripState::gripped)
 	{
-		auto cast = Cast<UShapeComponent>(otherComponent);
+		auto cast = Cast<UStaticMeshComponent>(otherComponent);
 		if (cast != nullptr)
 		{
 			auto itemSlot = Cast<UItemSlot>(cast->GetAttachParent());
@@ -213,8 +212,11 @@ void ASlotableActor::subscribeToSlotOccupiedEvent(UItemSlot* slot)
 
 void ASlotableActor::unsubscribeFromOccupiedEvent(UItemSlot* slot)
 {
-	if (slot->OnOccupiedEvent.Remove(OccupiedEventHandle))
-		OccupiedEventHandle.Reset();
+	if (slot != nullptr)
+	{
+		if (slot->OnOccupiedEvent.Remove(OccupiedEventHandle))
+			OccupiedEventHandle.Reset();
+	}
 }
 
 void ASlotableActor::subscribeToSlotAvailableEvent(UItemSlot* slot)

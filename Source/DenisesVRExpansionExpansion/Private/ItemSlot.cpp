@@ -34,8 +34,7 @@ void UItemSlot::BeginPlay()
 	trigger->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	trigger->RegisterComponent();
 	GetOwner()->AddInstanceComponent(trigger);
-	trigger->SetHiddenInGame(false);
-	trigger->SetVisibility(true);
+	trigger->SetVisibility(false);
 }
 
 /// <summary>
@@ -69,6 +68,8 @@ void UItemSlot::ReloadVisuals()
 
 void UItemSlot::EditTriggerShape()
 {
+	SaveMeshTransform();
+
 	currentVisualIndex = -1;
 	SetVisibility(true);
 	SetPreviewVisuals(triggerMesh);
@@ -139,22 +140,14 @@ void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 
 void UItemSlot::CycleThroughPreviews()
 {
-	if (currentVisualIndex < 0)
-	{
+	SaveMeshTransform();
+
+	if (currentVisualIndex + 1 < visualsArray.Num())
+		currentVisualIndex++;
+	else
 		currentVisualIndex = 0;
-		SetPreviewVisuals(visualsArray[currentVisualIndex]);
-		return;
-	}
 
-	if (visualsArray.Num() > 0)
-	{
-		if (currentVisualIndex + 1 < visualsArray.Num())
-			currentVisualIndex++;
-		else
-			currentVisualIndex = 0;
-
-		SetPreviewVisuals(visualsArray[currentVisualIndex]);
-	}
+	SetPreviewVisuals(visualsArray[currentVisualIndex]);
 }
 
 bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)

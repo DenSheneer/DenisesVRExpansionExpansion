@@ -22,14 +22,12 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				// Get a pointer to the actor component instance
 				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
 
-				if (SelectedObjects.Num() > 0)
+				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
 				{
-					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
-
-					// Call your function on the actor component
-					if (ActorComponent != nullptr)
+					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+					if (ItemSlot)
 					{
-						ActorComponent->CycleThroughPreviews();
+						ItemSlot->CycleThroughPreviews();
 					}
 				}
 
@@ -53,14 +51,12 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				// Get a pointer to the actor component instance
 				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
 
-				if (SelectedObjects.Num() > 0)
+				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
 				{
-					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
-
-					// Call your function on the actor component
-					if (ActorComponent != nullptr)
+					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+					if (ItemSlot)
 					{
-						ActorComponent->EditTriggerShape();
+						ItemSlot->EditTriggerShape();
 					}
 				}
 
@@ -84,14 +80,12 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				// Get a pointer to the actor component instance
 				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
 
-				if (SelectedObjects.Num() > 0)
+				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
 				{
-					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
-
-					// Call your function on the actor component
-					if (ActorComponent != nullptr)
+					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+					if (ItemSlot)
 					{
-						ActorComponent->TogglePreviewVisibility();
+						ItemSlot->ToggleVisibility();
 					}
 				}
 
@@ -125,14 +119,12 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				// Get a pointer to the actor component instance
 				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
 
-				if (SelectedObjects.Num() > 0)
+				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
 				{
-					UItemSlot* ActorComponent = Cast<UItemSlot>(SelectedObjects[0].Get());
-
-					// Call your function on the actor component
-					if (ActorComponent != nullptr)
+					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+					if (ItemSlot)
 					{
-						ActorComponent->ReloadVisuals();
+						ItemSlot->ReloadVisuals();
 					}
 				}
 
