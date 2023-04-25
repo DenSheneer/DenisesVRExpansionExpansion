@@ -122,7 +122,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
 				{
 					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
-					if (ItemSlot)
+					if (ItemSlot != nullptr)
 					{
 						ItemSlot->ReloadVisuals();
 					}

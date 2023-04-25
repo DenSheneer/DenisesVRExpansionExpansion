@@ -11,12 +11,16 @@ void ASlotableActor::BeginPlay()
 }
 void ASlotableActor::Tick(float deltaSeconds)
 {
+	Super::Tick(deltaSeconds);
+
 	if (currentlyAvailable_Slots.Num() > 1 && currentGripState == EItemGripState::gripped)
 		refreshNearestSlot();
 }
 
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
+	Super::OnGrip_Implementation(GrippingController, GripInformation);
+
 	if (currentGripState == EItemGripState::slotted)
 	{
 		current_ResidingSlot->RemoveSlotableActor(this);
@@ -29,17 +33,15 @@ void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* Gripp
 
 void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed)
 {
+
 	UItemSlot* nearestSlot = currentNearestSlot;
 	if (nearestSlot != nullptr)
 	{
 		unsubscribeFromOccupiedEvent(nearestSlot);
 		if (nearestSlot->TryToReceiveActor(this))
 		{
-			//this->DisableComponentsSimulatePhysics();
 			current_ResidingSlot = nearestSlot;
 			currentGripState = EItemGripState::slotted;
-
-			//this->SetActorLocationAndRotation(nearestSlot->GetComponentLocation(), nearestSlot->GetComponentRotation());
 		}
 		else
 			currentGripState = EItemGripState::loose;
@@ -48,6 +50,7 @@ void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent
 		currentGripState = EItemGripState::loose;
 
 	reset_GrippingParameters();
+	Super::OnGripRelease_Implementation(ReleasingController, GripInformation, bWasSocketed);
 }
 
 void ASlotableActor::manualFindAvailableSlotsCall()
@@ -121,6 +124,9 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("overlap event from: %s"), *otherComponent->GetName()));
+
 	auto cast = Cast<UStaticMeshComponent>(otherComponent);
 	if (cast != nullptr)
 		handleSlotOverlap(Cast<UItemSlot>(cast->GetAttachParent()));

@@ -49,14 +49,19 @@ void UItemSlot::ReloadVisuals()
 
 	for (int i = 0; i < acceptedActorsNr; i++)
 	{
-		FSlotableActorVisuals gfx;
-		auto obj = acceptedActors[i].GetDefaultObject();
-		gfx.Mesh = obj->PreviewMesh;
-		gfx.Scale = obj->MeshScale;
-		gfx.RelativePosition = GetRelativeLocation();
-		gfx.RelativeRotation = GetRelativeRotation();
+		if (acceptedActors[i]->IsValidLowLevel())
+		{
+			FSlotableActorVisuals gfx;
+			auto obj = acceptedActors[i].GetDefaultObject();
+			gfx.Mesh = obj->PreviewMesh;
+			gfx.Scale = obj->MeshScale;
+			gfx.RelativePosition = GetRelativeLocation();
+			gfx.RelativeRotation = GetRelativeRotation();
 
-		visualsArray.Add(i, gfx);
+			visualsArray.Add(i, gfx);
+		}
+		else
+			acceptedActors.RemoveAt(i);
 	}
 
 	if (visualsArray.Num() > 0)
@@ -154,10 +159,16 @@ bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
 {
 	if (actor == reservedForActor)
 	{
+		this->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+		actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		actor->SetOwner(GetOwner());
 		actor->DisableComponentsSimulatePhysics();
-		actor->AttachToActor(this->GetOwner(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
+		actor->AttachToActor(this->GetOwner(), AttachmentRules);
 		actor->SetActorRelativeLocation(this->GetRelativeLocation());
 		actor->SetActorRelativeRotation(this->GetRelativeRotation());
+		this->SetRelativeScale3D(visualsArray[currentVisualIndex].Scale);
 		SetVisibility(false);
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
@@ -178,6 +189,10 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 
 void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide)
 {
+
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("received event from: %s"), *actor->GetName()));
+
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
 	if (index != INDEX_NONE)
 	{
@@ -218,6 +233,8 @@ bool UItemSlot::TryToReserve(ASlotableActor* actor, EControllerHand handSide)
 	if (currentState == EItemSlotState::available)
 	{
 		int index = acceptedActors.IndexOfByKey(actor->GetClass());
+
+
 		if (index != INDEX_NONE)
 		{
 			reserveSlotForActor(actor, handSide);
