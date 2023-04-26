@@ -22,13 +22,6 @@ public:
 	UItemSlot();
 
 protected:
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		AActor* reservedForActor;
-
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
@@ -37,16 +30,20 @@ protected:
 		UMaterial* lefthandMaterial;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
 		UMaterial* rightHandMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
+		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "5"))
+		TMap<int, FSlotableActorVisuals> visualsArray;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing")
-	TMap<int, FSlotableActorVisuals> visualsArray;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+		TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+		AActor* reservedForActor;
 
 	void SaveMeshTransform();
 	void SetPreviewVisuals(FSlotableActorVisuals visualProperties);
 
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Accepted actors")
-		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
 
 public:
 	//	editor functions
