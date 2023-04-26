@@ -30,10 +30,8 @@ protected:
 		UMaterial* lefthandMaterial;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
 		UMaterial* rightHandMaterial;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
-		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "5"))
-		TMap<int, FSlotableActorVisuals> visualsArray;
+		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> visualsArray;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 		TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
@@ -47,7 +45,7 @@ protected:
 
 public:
 	//	editor functions
-	void CycleThroughPreviews();
+	void CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals);
 	void TogglePreviewVisibility();
 	void ReloadVisuals();
 	void EditTriggerShape();
@@ -55,9 +53,12 @@ public:
 	bool CheckForCompatibility(ASlotableActor* actor);
 	bool TryToReserve(ASlotableActor* actor, EControllerHand handSide);
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
+		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
 	virtual void PostEditComponentMove(bool bFinished) override;
 #endif
 
@@ -78,5 +79,5 @@ public:
 
 private:
 	virtual void reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide);
-	int currentVisualIndex = 0;
+	TSubclassOf<class ASlotableActor> currentlyDisplayedVisuals;
 };

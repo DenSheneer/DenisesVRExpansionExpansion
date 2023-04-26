@@ -1,6 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "ItemSlotDetails.h"
+#include "IDetailGroup.h"
+#include "SlotableActor.h"
 #include "ItemSlot.h"
 
 TSharedRef<IDetailCustomization> ItemSlotDetails::MakeInstance()
@@ -13,32 +15,91 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 	IDetailCategoryBuilder& itemSlotcategory = DetailLayout.EditCategory("Item Slot editing");
 	itemSlotcategory.SetSortOrder(0);
 
-	// Add your custom function to the General category
-	TSharedRef<SWidget> cyclePreviewButton = SNew(SButton)
-		.Text(FText::FromString("Cycle Through Previews"))
-		.ContentPadding(10.0f)
-		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+	//// Add your custom function to the General category
+	//TSharedRef<SWidget> cyclePreviewButton = SNew(SButton)
+	//	.Text(FText::FromString("Cycle Through Previews"))
+	//	.ContentPadding(10.0f)
+	//	.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+	//		{
+	//			// Get a pointer to the actor component instance
+	//			TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+	//			for (int32 i = 0; i < SelectedObjects.Num(); ++i)
+	//			{
+	//				UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+	//				if (ItemSlot)
+	//				{
+	//					ItemSlot->CycleThroughPreviews();
+	//				}
+	//			}
+
+	//			return FReply::Handled();
+	//		}));
+
+	//itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
+	//	.WholeRowContent()
+	//	[
+	//		cyclePreviewButton
+	//	];
+
+	// Add a button for each element in the acceptedActors array
+
+	IDetailGroup& AcceptedActorsGroup = itemSlotcategory.AddGroup(FName(TEXT("Accepted Actors")), FText::FromString("Accepted Actors"));
+
+	uint32 AcceptedActorsNr;
+	auto arrayRef = DetailLayout.GetProperty(GET_MEMBER_NAME_CHECKED(UItemSlot, acceptedActors))->AsArray();
+
+	arrayRef->GetNumElements(AcceptedActorsNr);
+
+	for (uint32 i = 0; i < AcceptedActorsNr; i++)
+	{
+		FString ActorName = "NONE";
+		TSharedPtr<IPropertyHandle> childHandle = arrayRef->GetElement(i);
+		UObject* childObject = nullptr;
+		childHandle->GetValue(childObject);
+		UClass* elementClass = Cast<UClass>(childObject);
+
+		if (childHandle.IsValid())
+		{
+			if (elementClass)
 			{
-				// Get a pointer to the actor component instance
-				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+				ActorName = elementClass->GetDisplayNameText().ToString();
+			}
+		}
 
-				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
+
+		TSharedRef<SButton> ActorButton = SNew(SButton)
+			.Text(FText::FromString("edit"))
+			.ContentPadding(10.0f)
+			.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
 				{
-					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
-					if (ItemSlot)
+					// Get a pointer to the actor component instance
+					TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+					if (SelectedObjects.Num() > 0)
 					{
-						ItemSlot->CycleThroughPreviews();
+						UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[0]);
+						if (ItemSlot)
+						{
+							if (elementClass)
+							{
+								// @TODO
+								//UClass* ElementClass = Cast<UClass>(childObject);
+								//TSubclassOf<ASlotableActor> ElementClassSub = TSubclassOf<ASlotableActor>(ElementClass->StaticClass());
+								ItemSlot->CycleThroughPreviews(ItemSlot->StaticClass());
+							}
+						}
 					}
-				}
 
-				return FReply::Handled();
-			}));
+					return FReply::Handled();
+				}));
 
-	itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
-		.WholeRowContent()
-		[
-			cyclePreviewButton
-		];
+		AcceptedActorsGroup.AddWidgetRow()
+			.NameContent()
+			[SNew(STextBlock).Text(FText::FromString(ActorName))]
+		.ValueContent()
+			[ActorButton];
+	}
 
 	//	--------------------
 

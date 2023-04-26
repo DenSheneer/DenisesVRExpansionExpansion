@@ -45,7 +45,7 @@ void UItemSlot::ReloadVisuals()
 {
 	int acceptedActorsNr = acceptedActors.Num();
 	visualsArray.Empty();
-	currentVisualIndex = 0;
+	currentlyDisplayedVisuals = nullptr;
 
 	for (int i = 0; i < acceptedActorsNr; i++)
 	{
@@ -56,18 +56,12 @@ void UItemSlot::ReloadVisuals()
 			gfx.Mesh = obj->PreviewMesh;
 			gfx.Scale = obj->MeshScale;
 			gfx.RelativePosition = GetRelativeLocation();
-			gfx.RelativeRotation = GetRelativeRotation();
+			gfx.RelativeRotation = FRotator::ZeroRotator;
 
-			visualsArray.Add(i, gfx);
+			visualsArray.Add(acceptedActors[i], gfx);
 		}
 		else
 			acceptedActors.RemoveAt(i);
-	}
-
-	if (visualsArray.Num() > 0)
-	{
-		SetVisibility(true);
-		SetPreviewVisuals(visualsArray[0]);
 	}
 }
 
@@ -75,7 +69,7 @@ void UItemSlot::EditTriggerShape()
 {
 	SaveMeshTransform();
 
-	currentVisualIndex = -1;
+	currentlyDisplayedVisuals = nullptr;
 	SetVisibility(true);
 	SetPreviewVisuals(triggerMesh);
 }
@@ -93,9 +87,9 @@ bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
 void UItemSlot::SaveMeshTransform()
 {
 	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("saving index: %d"), currentVisualIndex));
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("saving index: %d"), currentlyDisplayedVisuals));
 
-	if (currentVisualIndex == -1)
+	if (currentlyDisplayedVisuals == nullptr)
 	{
 		triggerMesh.RelativePosition = GetRelativeLocation();
 		triggerMesh.RelativeRotation = GetRelativeRotation();
@@ -104,17 +98,14 @@ void UItemSlot::SaveMeshTransform()
 		if (GEngine)
 			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved trigger mesh"));
 	}
-	else if (currentVisualIndex >= 0)
+	else if (visualsArray.Contains(currentlyDisplayedVisuals))
 	{
-		if (visualsArray.Contains(currentVisualIndex))
-		{
-			visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
-			visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
-			visualsArray[currentVisualIndex].Scale = GetRelativeScale3D();
+		visualsArray[currentlyDisplayedVisuals].RelativePosition = GetRelativeLocation();
+		visualsArray[currentlyDisplayedVisuals].RelativeRotation = GetRelativeRotation();
+		visualsArray[currentlyDisplayedVisuals].Scale = GetRelativeScale3D();
 
-			if (GEngine)
-				GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
-		}
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
 	}
 }
 
@@ -134,7 +125,7 @@ void UItemSlot::TogglePreviewVisibility()
 void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 {
 	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("current index %d"), currentVisualIndex));
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("current index %d"), currentlyDisplayedVisuals));
 
 	SetStaticMesh(visualProperties.Mesh);
 	SetWorldScale3D(visualProperties.Scale);
@@ -143,16 +134,24 @@ void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 	SetMaterial(0, visualProperties.PreviewMaterial);
 }
 
-void UItemSlot::CycleThroughPreviews()
+void UItemSlot::CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals)
 {
-	SaveMeshTransform();
+	UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), *visuals->GetName());
 
-	if (currentVisualIndex + 1 < visualsArray.Num())
-		currentVisualIndex++;
+	if (visualsArray.Contains(visuals))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Succeeded"));
+	}
 	else
-		currentVisualIndex = 0;
+	{
+		UE_LOG(LogTemp, Warning, TEXT("failed"));
+	}
 
-	SetPreviewVisuals(visualsArray[currentVisualIndex]);
+
+	//SaveMeshTransform();
+	//currentlyDisplayedVisuals.Next
+
+	//SetPreviewVisuals(visualsArray[currentlyDisplayedVisuals]);
 }
 
 bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
@@ -168,7 +167,7 @@ bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
 		actor->AttachToActor(this->GetOwner(), AttachmentRules);
 		actor->SetActorRelativeLocation(this->GetRelativeLocation());
 		actor->SetActorRelativeRotation(this->GetRelativeRotation());
-		this->SetRelativeScale3D(visualsArray[currentVisualIndex].Scale);
+		this->SetRelativeScale3D(visualsArray[currentlyDisplayedVisuals].Scale);
 		SetVisibility(false);
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
@@ -193,30 +192,28 @@ void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handS
 	if (GEngine)
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("received event from: %s"), *actor->GetName()));
 
-	int index = acceptedActors.IndexOfByKey(actor->GetClass());
-	if (index != INDEX_NONE)
+
+	if (visualsArray.Contains(actor->GetClass()))
 	{
-		if (visualsArray.Contains(index))
+		FSlotableActorVisuals visuals = *visualsArray.Find(actor->GetClass());
+		SetPreviewVisuals(visuals);
+
+		switch (handSide)
 		{
-			SetPreviewVisuals(visualsArray[index]);
-
-			switch (handSide)
-			{
-			case EControllerHand::Left:
-				SetMaterial(0, lefthandMaterial);
-				break;
-			case EControllerHand::Right:
-				SetMaterial(0, rightHandMaterial);
-				break;
-			default:
-				break;
-			}
-
+		case EControllerHand::Left:
+			SetMaterial(0, lefthandMaterial);
+			break;
+		case EControllerHand::Right:
+			SetMaterial(0, rightHandMaterial);
+			break;
+		default:
+			break;
 		}
-		reservedForActor = actor;
-		currentState = EItemSlotState::reserved;
-		SetVisibility(true);
+
 	}
+	reservedForActor = actor;
+	currentState = EItemSlotState::reserved;
+	SetVisibility(true);
 }
 
 void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
@@ -256,6 +253,50 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 	SaveMeshTransform();
 
 	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+
+void UItemSlot::PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeChainProperty(PropertyChangedEvent);
+
+	// Check if the modified property is the ItemSlots array
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(UItemSlot, acceptedActors))
+	{
+		// Check what specifically changed in the array
+		int32 ModifiedIndices = PropertyChangedEvent.GetNumObjectsBeingEdited();
+		// The array was modified, check which items were added, removed, or modified
+		for (int32 i = 0; i < ModifiedIndices; i++)
+		{
+			if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayAdd)
+			{
+				// An item was added to the array
+				auto AddedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
+				if (AddedObject)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Property was added"));
+				}
+			}
+			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayRemove)
+			{
+				// An item was removed from the array
+				auto RemovedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
+				if (RemovedObject)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Property was removed"));
+				}
+			}
+			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
+			{
+				// An item in the array was modified
+				auto ModifiedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
+				if (ModifiedObject)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Property was edited"));
+				}
+			}
+		}
+	}
 }
 
 void UItemSlot::PostEditComponentMove(bool bFinished)
