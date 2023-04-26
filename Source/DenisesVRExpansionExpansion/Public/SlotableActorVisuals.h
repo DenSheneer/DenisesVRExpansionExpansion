@@ -20,14 +20,14 @@ public:
 
 	/** Please add a variable description */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "Scale", MakeStructureDefaultValue = "1.000000,1.000000,1.000000"))
-		FVector Scale;
+		FVector Scale = FVector(1,1,1);
 
 	/** Please add a variable description */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "RelativePosition", MakeStructureDefaultValue = "0.000000,0.000000,0.000000"))
-		FVector RelativePosition;
+		FVector RelativePosition =  FVector(0, 0, 0);
 	
 	/** Please add a variable description */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "RelativeRotation", MakeStructureDefaultValue = "0.000000,0.000000,0.000000"))
-		FRotator RelativeRotation;
+		FRotator RelativeRotation = FRotator::ZeroRotator;
 };
 

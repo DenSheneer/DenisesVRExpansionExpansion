@@ -3,6 +3,10 @@
 
 #include "ItemSlot.h"
 #include "SlotableActor.h"
+#include "Components/SphereComponent.h"
+#include <Editor.h>
+#include "Kismet/KismetMathLibrary.h"
+#include "ItemSlotDetails.h"
 
 // Sets default values for this component's properties
 UItemSlot::UItemSlot()
@@ -19,6 +23,18 @@ void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
 	SetVisibility(false);
+
+	SetPreviewVisuals(triggerMesh);
+	UStaticMeshComponent* trigger = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_trigger"));
+	trigger->SetStaticMesh(triggerMesh.Mesh);
+	trigger->SetMaterial(0, triggerMesh.PreviewMaterial);
+	trigger->SetWorldScale3D(triggerMesh.Scale);
+	trigger->SetWorldLocation(triggerMesh.RelativePosition);
+	trigger->SetRelativeRotation(triggerMesh.RelativeRotation);
+	trigger->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	trigger->RegisterComponent();
+	GetOwner()->AddInstanceComponent(trigger);
+	trigger->SetVisibility(false);
 }
 
 /// <summary>
@@ -33,15 +49,19 @@ void UItemSlot::ReloadVisuals()
 
 	for (int i = 0; i < acceptedActorsNr; i++)
 	{
-		FSlotableActorVisuals gfx;
-		auto obj = acceptedActors[i].GetDefaultObject();
-		gfx.Mesh = obj->PreviewMesh;
-		gfx.Scale = obj->MeshScale;
-		gfx.RelativePosition = GetRelativeLocation();
-		gfx.RelativeRotation = GetRelativeRotation();
-		gfx.PreviewMaterial = LoadObject<UMaterial>(NULL, TEXT("/Script/Engine.Material'/Game/VRE/Core/Character/BasicShapeMaterialTrans.BasicShapeMaterialTrans'"));
+		if (acceptedActors[i]->IsValidLowLevel())
+		{
+			FSlotableActorVisuals gfx;
+			auto obj = acceptedActors[i].GetDefaultObject();
+			gfx.Mesh = obj->PreviewMesh;
+			gfx.Scale = obj->MeshScale;
+			gfx.RelativePosition = GetRelativeLocation();
+			gfx.RelativeRotation = GetRelativeRotation();
 
-		visualsArray.Add(i, gfx);
+			visualsArray.Add(i, gfx);
+		}
+		else
+			acceptedActors.RemoveAt(i);
 	}
 
 	if (visualsArray.Num() > 0)
@@ -51,10 +71,51 @@ void UItemSlot::ReloadVisuals()
 	}
 }
 
-void UItemSlot::SavePreviewPosAndRot()
+void UItemSlot::EditTriggerShape()
 {
-	visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
-	visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
+	SaveMeshTransform();
+
+	currentVisualIndex = -1;
+	SetVisibility(true);
+	SetPreviewVisuals(triggerMesh);
+}
+
+bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
+{
+	int index = acceptedActors.IndexOfByKey(actor->GetClass());
+	if (index != INDEX_NONE)
+	{
+		return true;
+	}
+	return false;
+}
+
+void UItemSlot::SaveMeshTransform()
+{
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("saving index: %d"), currentVisualIndex));
+
+	if (currentVisualIndex == -1)
+	{
+		triggerMesh.RelativePosition = GetRelativeLocation();
+		triggerMesh.RelativeRotation = GetRelativeRotation();
+		triggerMesh.Scale = GetRelativeScale3D();
+
+		if (GEngine)
+			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved trigger mesh"));
+	}
+	else if (currentVisualIndex >= 0)
+	{
+		if (visualsArray.Contains(currentVisualIndex))
+		{
+			visualsArray[currentVisualIndex].RelativePosition = GetRelativeLocation();
+			visualsArray[currentVisualIndex].RelativeRotation = GetRelativeRotation();
+			visualsArray[currentVisualIndex].Scale = GetRelativeScale3D();
+
+			if (GEngine)
+				GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
+		}
+	}
 }
 
 void UItemSlot::TogglePreviewVisibility()
@@ -72,6 +133,9 @@ void UItemSlot::TogglePreviewVisibility()
 /// <param name="visualProperties"></param>
 void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 {
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("current index %d"), currentVisualIndex));
+
 	SetStaticMesh(visualProperties.Mesh);
 	SetWorldScale3D(visualProperties.Scale);
 	SetRelativeLocation(visualProperties.RelativePosition);
@@ -81,72 +145,101 @@ void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 
 void UItemSlot::CycleThroughPreviews()
 {
-	int maxIndex = visualsArray.Num();
-	if (maxIndex > 0)
-	{
-		if (currentVisualIndex + 1 < maxIndex)
-			currentVisualIndex++;
-		else
-			currentVisualIndex = 0;
+	SaveMeshTransform();
 
-		SetPreviewVisuals(visualsArray[currentVisualIndex]);
-	}
+	if (currentVisualIndex + 1 < visualsArray.Num())
+		currentVisualIndex++;
+	else
+		currentVisualIndex = 0;
+
+	SetPreviewVisuals(visualsArray[currentVisualIndex]);
 }
 
-void UItemSlot::ReceiveSlotableActor(ASlotableActor* actor)
+bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
 {
-	if (actor != nullptr)
+	if (actor == reservedForActor)
 	{
-		actorsInRange = 0;
+		this->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+		actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		actor->SetOwner(GetOwner());
+		actor->DisableComponentsSimulatePhysics();
+		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
+		actor->AttachToActor(this->GetOwner(), AttachmentRules);
+		actor->SetActorRelativeLocation(this->GetRelativeLocation());
+		actor->SetActorRelativeRotation(this->GetRelativeRotation());
+		this->SetRelativeScale3D(visualsArray[currentVisualIndex].Scale);
 		SetVisibility(false);
-		isOccupied = true;
+		reservedForActor = nullptr;
+		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
+		return true;
 	}
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
+
+	return false;
 }
 
 void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 {
-	isOccupied = false;
+	currentState = EItemSlotState::available;
 	OnAvailableEvent.Broadcast(this);
-
-	//if (GEngine)
-	//	GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, TEXT("sent available broadcast"));
-
 }
 
-void UItemSlot::ActorInRangeEvent(ASlotableActor* actor)
+void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide)
 {
+
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("received event from: %s"), *actor->GetName()));
+
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
 	if (index != INDEX_NONE)
 	{
 		if (visualsArray.Contains(index))
+		{
 			SetPreviewVisuals(visualsArray[index]);
 
-		if (GEngine)
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, TEXT("received inrange event from ") + actor->GetName());
+			switch (handSide)
+			{
+			case EControllerHand::Left:
+				SetMaterial(0, lefthandMaterial);
+				break;
+			case EControllerHand::Right:
+				SetMaterial(0, rightHandMaterial);
+				break;
+			default:
+				break;
+			}
 
-		actorsInRange++;
+		}
+		reservedForActor = actor;
+		currentState = EItemSlotState::reserved;
 		SetVisibility(true);
 	}
 }
 
 void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 {
-	actorsInRange--;
+	currentState = EItemSlotState::available;
+	reservedForActor = nullptr;
+	SetVisibility(false);
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, FString::Printf(TEXT("received out of range event %d"), actorsInRange));
-
-	if (actorsInRange < 1)
-		SetVisibility(false);
+	OnAvailableEvent.Broadcast(this);
 }
 
-bool UItemSlot::checkCompatibility(ASlotableActor* actor)
+bool UItemSlot::TryToReserve(ASlotableActor* actor, EControllerHand handSide)
 {
-	int index = acceptedActors.IndexOfByKey(actor->GetClass());
-	if (index != INDEX_NONE)
+	if (currentState == EItemSlotState::available)
 	{
-		return true;
+		int index = acceptedActors.IndexOfByKey(actor->GetClass());
+
+
+		if (index != INDEX_NONE)
+		{
+			reserveSlotForActor(actor, handSide);
+			return true;
+		}
 	}
 	return false;
 }
@@ -158,3 +251,19 @@ void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompon
 
 	// ...
 }
+void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	SaveMeshTransform();
+
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+}
+
+void UItemSlot::PostEditComponentMove(bool bFinished)
+{
+	if (bFinished)
+		SaveMeshTransform();
+
+	Super::PostEditComponentMove(bFinished);
+}
+
+
