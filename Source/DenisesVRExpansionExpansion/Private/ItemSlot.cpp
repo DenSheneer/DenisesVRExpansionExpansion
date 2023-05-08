@@ -140,18 +140,16 @@ void UItemSlot::CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals)
 
 	if (visualsArray.Contains(visuals))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Succeeded"));
+		SaveMeshTransform();
+		currentlyDisplayedVisuals = visuals;
+		SetPreviewVisuals(visualsArray[currentlyDisplayedVisuals]);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("failed"));
+		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visuals->GetName());
 	}
 
-
-	//SaveMeshTransform();
-	//currentlyDisplayedVisuals.Next
-
-	//SetPreviewVisuals(visualsArray[currentlyDisplayedVisuals]);
+	//UE_LOG(LogTemp, Warning, TEXT("CALLED %s"), *visuals->GetName());
 }
 
 bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
