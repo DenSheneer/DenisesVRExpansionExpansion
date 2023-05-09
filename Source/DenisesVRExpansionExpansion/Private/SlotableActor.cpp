@@ -77,8 +77,9 @@ void ASlotableActor::refreshNearestSlot()
 	{
 		if (currentNearestSlot != nullptr)
 		{
-			currentNearestSlot->ActorOutOfRangeEvent(this);
 			unsubscribeFromOccupiedEvent(currentNearestSlot);
+			unsubscribeFromAvailableEvent(currentNearestSlot);
+			currentNearestSlot->ActorOutOfRangeEvent(this);
 		}
 
 		if (newNearest != nullptr)
@@ -124,12 +125,15 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("overlap event from: %s"), *otherComponent->GetName()));
-
-	auto cast = Cast<UStaticMeshComponent>(otherComponent);
-	if (cast != nullptr)
-		handleSlotOverlap(Cast<UItemSlot>(cast->GetAttachParent()));
+	auto slotTriggerComponent = Cast<UStaticMeshComponent>(otherComponent);
+	if (slotTriggerComponent != nullptr)
+	{
+		UItemSlot* slot = Cast<UItemSlot>(slotTriggerComponent->GetAttachParent());
+		if (slot != nullptr)
+		{
+			handleSlotOverlap(slot);
+		}
+	}
 }
 void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
 {

@@ -1,6 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "ItemSlot.h"
 #include "SlotableActor.h"
 #include "Components/SphereComponent.h"
@@ -8,17 +5,11 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "ItemSlotDetails.h"
 
-// Sets default values for this component's properties
 UItemSlot::UItemSlot()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = true;
-
-	// ...
 }
 
-// Called when the game starts
 void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
@@ -37,43 +28,6 @@ void UItemSlot::BeginPlay()
 	trigger->SetVisibility(false);
 }
 
-/// <summary>
-/// Fetch the allowed actors' preview visual properties (mesh, material and world scale) and set this slot's properties to match those.
-/// WARNING: Resets previously saved positions and rotations.
-/// </summary>
-void UItemSlot::ReloadVisuals()
-{
-	int acceptedActorsNr = acceptedActors.Num();
-	visualsArray.Empty();
-	currentlyDisplayedVisuals = nullptr;
-
-	for (int i = 0; i < acceptedActorsNr; i++)
-	{
-		if (acceptedActors[i]->IsValidLowLevel())
-		{
-			FSlotableActorVisuals gfx;
-			auto obj = acceptedActors[i].GetDefaultObject();
-			gfx.Mesh = obj->PreviewMesh;
-			gfx.Scale = obj->MeshScale;
-			gfx.RelativePosition = GetRelativeLocation();
-			gfx.RelativeRotation = FRotator::ZeroRotator;
-
-			visualsArray.Add(acceptedActors[i], gfx);
-		}
-		else
-			acceptedActors.RemoveAt(i);
-	}
-}
-
-void UItemSlot::EditTriggerShape()
-{
-	SaveMeshTransform();
-
-	currentlyDisplayedVisuals = nullptr;
-	SetVisibility(true);
-	SetPreviewVisuals(triggerMesh);
-}
-
 bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
 {
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
@@ -82,31 +36,6 @@ bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
 		return true;
 	}
 	return false;
-}
-
-void UItemSlot::SaveMeshTransform()
-{
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("saving index: %d"), currentlyDisplayedVisuals));
-
-	if (currentlyDisplayedVisuals == nullptr)
-	{
-		triggerMesh.RelativePosition = GetRelativeLocation();
-		triggerMesh.RelativeRotation = GetRelativeRotation();
-		triggerMesh.Scale = GetRelativeScale3D();
-
-		if (GEngine)
-			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved trigger mesh"));
-	}
-	else if (visualsArray.Contains(currentlyDisplayedVisuals))
-	{
-		visualsArray[currentlyDisplayedVisuals].RelativePosition = GetRelativeLocation();
-		visualsArray[currentlyDisplayedVisuals].RelativeRotation = GetRelativeRotation();
-		visualsArray[currentlyDisplayedVisuals].Scale = GetRelativeScale3D();
-
-		if (GEngine)
-			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), TEXT("saved preview mesh."));
-	}
 }
 
 void UItemSlot::TogglePreviewVisibility()
@@ -124,32 +53,11 @@ void UItemSlot::TogglePreviewVisibility()
 /// <param name="visualProperties"></param>
 void UItemSlot::SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 {
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("current index %d"), currentlyDisplayedVisuals));
-
 	SetStaticMesh(visualProperties.Mesh);
 	SetWorldScale3D(visualProperties.Scale);
 	SetRelativeLocation(visualProperties.RelativePosition);
 	SetRelativeRotation(visualProperties.RelativeRotation);
 	SetMaterial(0, visualProperties.PreviewMaterial);
-}
-
-void UItemSlot::CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals)
-{
-	UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), *visuals->GetName());
-
-	if (visualsArray.Contains(visuals))
-	{
-		SaveMeshTransform();
-		currentlyDisplayedVisuals = visuals;
-		SetPreviewVisuals(visualsArray[currentlyDisplayedVisuals]);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visuals->GetName());
-	}
-
-	//UE_LOG(LogTemp, Warning, TEXT("CALLED %s"), *visuals->GetName());
 }
 
 bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
@@ -165,7 +73,6 @@ bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
 		actor->AttachToActor(this->GetOwner(), AttachmentRules);
 		actor->SetActorRelativeLocation(this->GetRelativeLocation());
 		actor->SetActorRelativeRotation(this->GetRelativeRotation());
-		this->SetRelativeScale3D(visualsArray[currentlyDisplayedVisuals].Scale);
 		SetVisibility(false);
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
@@ -186,11 +93,6 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 
 void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide)
 {
-
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("received event from: %s"), *actor->GetName()));
-
-
 	if (visualsArray.Contains(actor->GetClass()))
 	{
 		FSlotableActorVisuals visuals = *visualsArray.Find(actor->GetClass());
@@ -239,13 +141,89 @@ bool UItemSlot::TryToReserve(ASlotableActor* actor, EControllerHand handSide)
 	return false;
 }
 
-// Called every frame
 void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// ...
 }
+
+void UItemSlot::CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals)
+{
+	//UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), *visuals->GetName());
+
+	if (visualsArray.Contains(visuals))
+	{
+		SaveMeshTransform();
+		currentlyDisplayedVisuals = visuals;
+		SetPreviewVisuals(visualsArray[currentlyDisplayedVisuals]);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visuals->GetName());
+	}
+}
+
+void UItemSlot::SaveMeshTransform()
+{
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), FString::Printf(TEXT("saving: %s"), currentlyDisplayedVisuals.GetDefaultObject()->GetName()));
+
+	if (currentlyDisplayedVisuals == nullptr)	// not fully safe: might modify trigger shape when currentlyDisplayedVisuals is actually invalid.
+	{
+		triggerMesh.RelativePosition = GetRelativeLocation();
+		triggerMesh.RelativeRotation = GetRelativeRotation();
+		triggerMesh.Scale = GetRelativeScale3D();
+	}
+	else if (visualsArray.Contains(currentlyDisplayedVisuals))
+	{
+		visualsArray[currentlyDisplayedVisuals].RelativePosition = GetRelativeLocation();
+		visualsArray[currentlyDisplayedVisuals].RelativeRotation = GetRelativeRotation();
+		visualsArray[currentlyDisplayedVisuals].Scale = GetRelativeScale3D();
+	}
+}
+
+/// <summary>
+/// Fetch the allowed actors' preview visual properties (mesh, material and world scale) and set this slot's properties to match those.
+/// WARNING: Resets previously saved positions and rotations.
+/// </summary>
+void UItemSlot::ReloadVisuals()
+{
+	int acceptedActorsNr = acceptedActors.Num();
+	visualsArray.Empty();
+	currentlyDisplayedVisuals = nullptr;
+
+	for (int i = 0; i < acceptedActorsNr; i++)
+	{
+		if (acceptedActors[i]->IsValidLowLevel())
+		{
+			FSlotableActorVisuals gfx;
+			auto obj = acceptedActors[i].GetDefaultObject();
+			gfx.Mesh = obj->PreviewMesh;
+			gfx.Scale = obj->MeshScale;
+			gfx.RelativePosition = GetRelativeLocation();
+			gfx.RelativeRotation = FRotator::ZeroRotator;
+
+			visualsArray.Add(acceptedActors[i], gfx);
+		}
+		else
+			acceptedActors.RemoveAt(i);
+	}
+	UPackage* Package = this->GetOutermost();
+	if (Package != nullptr)
+	{
+		Package->SetDirtyFlag(true);
+	}
+
+}
+
+void UItemSlot::EditTriggerShape()
+{
+	SaveMeshTransform();
+
+	currentlyDisplayedVisuals = nullptr;
+	SetVisibility(true);
+	SetPreviewVisuals(triggerMesh);
+}
+
 void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	SaveMeshTransform();
