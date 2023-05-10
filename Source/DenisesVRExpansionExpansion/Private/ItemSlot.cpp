@@ -3,6 +3,7 @@
 #include "Components/SphereComponent.h"
 #include <Editor.h>
 #include "Kismet/KismetMathLibrary.h"
+#include "Editor/UnrealEd/Public/Editor.h"
 #include "ItemSlotDetails.h"
 
 UItemSlot::UItemSlot()
@@ -155,6 +156,13 @@ void UItemSlot::CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals)
 		SaveMeshTransform();
 		currentlyDisplayedVisuals = visuals;
 		SetPreviewVisuals(visualsArray[currentlyDisplayedVisuals]);
+
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+
+		GEditor->SelectNone(false, true, false);
+		GEditor->SelectComponent(this, true, true, true);
+		GEditor->RedrawAllViewports(true);
 	}
 	else
 	{
@@ -164,8 +172,11 @@ void UItemSlot::CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals)
 
 void UItemSlot::SaveMeshTransform()
 {
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), FString::Printf(TEXT("saving: %s"), currentlyDisplayedVisuals.GetDefaultObject()->GetName()));
+	//if (GEngine)
+	//	GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor(150, 150, 150), FString::Printf(TEXT("saving: %s"), currentlyDisplayedVisuals.GetDefaultObject()->GetName()));
+
+	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+	GEditor->RedrawLevelEditingViewports(true);
 
 	if (currentlyDisplayedVisuals == nullptr)	// not fully safe: might modify trigger shape when currentlyDisplayedVisuals is actually invalid.
 	{
@@ -179,6 +190,9 @@ void UItemSlot::SaveMeshTransform()
 		visualsArray[currentlyDisplayedVisuals].RelativeRotation = GetRelativeRotation();
 		visualsArray[currentlyDisplayedVisuals].Scale = GetRelativeScale3D();
 	}
+
+	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+	GEditor->RedrawLevelEditingViewports(true);
 }
 
 /// <summary>
@@ -213,6 +227,9 @@ void UItemSlot::ReloadVisuals()
 		Package->SetDirtyFlag(true);
 	}
 
+	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+	GEditor->RedrawLevelEditingViewports(true);
+	GEditor->RedrawAllViewports(true);
 }
 
 void UItemSlot::EditTriggerShape()
@@ -222,6 +239,10 @@ void UItemSlot::EditTriggerShape()
 	currentlyDisplayedVisuals = nullptr;
 	SetVisibility(true);
 	SetPreviewVisuals(triggerMesh);
+
+	GEditor->SelectNone(false, true, false);
+	GEditor->SelectComponent(this, true, true, true);
+	GEditor->RedrawAllViewports(true);
 }
 
 void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
