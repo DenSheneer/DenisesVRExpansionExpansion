@@ -45,7 +45,7 @@ protected:
 
 public:
 	//	editor functions
-	void CycleThroughPreviews(TSubclassOf<class ASlotableActor> visuals);
+	void SetVisualsToAcceptedActor(TSubclassOf<class ASlotableActor> visuals);
 	void TogglePreviewVisibility();
 	void ReloadVisuals();
 	void EditTriggerShape();
@@ -80,4 +80,7 @@ public:
 private:
 	virtual void reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide);
 	TSubclassOf<class ASlotableActor> currentlyDisplayedVisuals;
+	UStaticMeshComponent* trigger;
+
+	bool triggerEditing = false;
 };

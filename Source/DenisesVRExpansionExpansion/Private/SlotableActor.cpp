@@ -125,7 +125,7 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 }
 void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
 {
-	auto slotTriggerComponent = Cast<UStaticMeshComponent>(otherComponent);
+	auto slotTriggerComponent = Cast<UPrimitiveComponent>(otherComponent);
 	if (slotTriggerComponent != nullptr)
 	{
 		UItemSlot* slot = Cast<UItemSlot>(slotTriggerComponent->GetAttachParent());

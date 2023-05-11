@@ -76,7 +76,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 							.ContentPadding(10.0f)
 							.OnClicked(FOnClicked::CreateLambda([selectedItemSlot, convertedToSlotableActorClass]() -> FReply
 								{
-									selectedItemSlot->CycleThroughPreviews(convertedToSlotableActorClass);
+									selectedItemSlot->SetVisualsToAcceptedActor(convertedToSlotableActorClass);
 
 									return FReply::Handled();
 								}));
