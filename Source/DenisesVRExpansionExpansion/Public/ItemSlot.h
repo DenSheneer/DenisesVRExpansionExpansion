@@ -39,16 +39,26 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 		AActor* reservedForActor;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+		FSlotableActorVisuals currentlyDisplayedVisuals;
+
+	void SaveEdit();
 	void SaveMeshTransform();
-	void SetPreviewVisuals(FSlotableActorVisuals visualProperties);
+	void SaveTriggerTransform();
 
 
 public:
-	//	editor functions
-	void SetVisualsToAcceptedActor(TSubclassOf<class ASlotableActor> visuals);
-	void TogglePreviewVisibility();
-	void ReloadVisuals();
-	void EditTriggerShape();
+	//	(E)ditor functions
+	void E_TogglePreviewVisibility();
+	void E_ReloadVisuals();
+	void E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visuals);
+	void E_ModifyTriggerShape();
+	void E_SetPreviewVisuals(FSlotableActorVisuals visualProperties);
+	void E_SetVisibility(bool hidden);
+
+	// (R)untime functions
+	void R_SetPreviewVisuals(FSlotableActorVisuals visualProperties);
+	void R_SetVisibility(bool hidden);
 
 	bool CheckForCompatibility(ASlotableActor* actor);
 	bool TryToReserve(ASlotableActor* actor, EControllerHand handSide);
@@ -79,8 +89,11 @@ public:
 
 private:
 	virtual void reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide);
-	TSubclassOf<class ASlotableActor> currentlyDisplayedVisuals;
+	TSubclassOf<class ASlotableActor> currentlyDisplayedSlotableActor;
+
+	UStaticMeshComponent* previewMesh;
 	UStaticMeshComponent* trigger;
 
-	bool triggerEditing = false;
+	void setupTriggerComponent();
+	void setupMeshShapeComponent();
 };

@@ -10,6 +10,9 @@ struct FSlotableActorVisuals
 {
 	GENERATED_BODY()
 public:
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "ID", MakeStructureDefaultValue = "None"))
+		FString ID;
+
 	/** Please add a variable description */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "Mesh", MakeStructureDefaultValue = "None"))
 		TObjectPtr<UStaticMesh> Mesh;

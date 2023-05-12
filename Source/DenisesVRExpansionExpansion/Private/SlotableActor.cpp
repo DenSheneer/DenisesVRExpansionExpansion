@@ -25,6 +25,7 @@ void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* Gripp
 	{
 		current_ResidingSlot->RemoveSlotableActor(this);
 		current_ResidingSlot = nullptr;
+		SetOwner(GrippingController->GetOwner());
 	}
 	currentGripState = EItemGripState::gripped;
 	currentGrippingController = GrippingController;

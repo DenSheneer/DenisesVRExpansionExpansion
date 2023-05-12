@@ -33,7 +33,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
 					if (ItemSlot)
 					{
-						ItemSlot->EditTriggerShape();
+						ItemSlot->E_ModifyTriggerShape();
 					}
 				}
 
@@ -76,7 +76,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 							.ContentPadding(10.0f)
 							.OnClicked(FOnClicked::CreateLambda([selectedItemSlot, convertedToSlotableActorClass]() -> FReply
 								{
-									selectedItemSlot->SetVisualsToAcceptedActor(convertedToSlotableActorClass);
+									selectedItemSlot->E_ModifyAcceptedActorMesh(convertedToSlotableActorClass);
 
 									return FReply::Handled();
 								}));
@@ -147,7 +147,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
 					if (ItemSlot != nullptr)
 					{
-						ItemSlot->ReloadVisuals();
+						ItemSlot->E_ReloadVisuals();
 					}
 				}
 
