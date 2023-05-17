@@ -3,20 +3,21 @@
 #include "Components/SphereComponent.h"
 #include <Editor.h>
 #include "Kismet/KismetMathLibrary.h"
+#include "ItemSlotTrigger.h"
 #include "Editor/UnrealEd/Public/Editor.h"
 #include "ItemSlotDetails.h"
 
 UItemSlot::UItemSlot()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	triggerMesh.ID = "trigger";
+	triggerVisuals.ID = "trigger";
 }
 
 void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
 
-	E_SetPreviewVisuals(triggerMesh);
+	E_SetPreviewVisuals(triggerVisuals);
 
 	setupMeshShapeComponent();
 	setupTriggerComponent();
@@ -82,7 +83,7 @@ void UItemSlot::E_SetVisibility(bool hidden) { this->SetVisibility(hidden); }
 bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
 {
 	if (actor == reservedForActor)
-	{			
+	{
 		actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
 		actor->SetOwner(GetOwner());
 		actor->DisableComponentsSimulatePhysics();
@@ -135,17 +136,8 @@ void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handS
 
 void UItemSlot::setupTriggerComponent()
 {
-	trigger = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_triggerRoot"));
-	trigger->SetStaticMesh(triggerMesh.Mesh);
-	trigger->SetMaterial(0, triggerMesh.PreviewMaterial);
-	trigger->SetWorldScale3D(triggerMesh.Scale);
-	trigger->AttachToComponent(this->GetAttachParent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-	trigger->SetRelativeLocationAndRotation(triggerMesh.RelativePosition, triggerMesh.RelativeRotation);
-	trigger->AttachToComponent(this, FAttachmentTransformRules::KeepWorldTransform);
-	trigger->RegisterComponent();
-	GetOwner()->AddInstanceComponent(trigger);
-
-	trigger->SetVisibility(true);
+	trigger = NewObject<UItemSlotTrigger>(GetOwner(), FName(GetName() + "_triggerRoot"));
+	trigger->SetUp(this, triggerVisuals);
 }
 
 void UItemSlot::setupMeshShapeComponent()
@@ -164,11 +156,13 @@ void UItemSlot::setupMeshShapeComponent()
 
 void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 {
-	currentState = EItemSlotState::available;
-	reservedForActor = nullptr;
-	R_SetVisibility(false);
-
-	OnAvailableEvent.Broadcast(this);
+	if (actor == reservedForActor)
+	{
+		currentState = EItemSlotState::available;
+		reservedForActor = nullptr;
+		R_SetVisibility(false);
+		OnAvailableEvent.Broadcast(this);
+	}
 }
 
 bool UItemSlot::TryToReserve(ASlotableActor* actor, EControllerHand handSide)
@@ -219,7 +213,7 @@ void UItemSlot::SaveEdit()
 {
 	//UE_LOG(LogTemp, Warning, TEXT("%s"), currentlyDisplayedVisuals);
 
-	if (currentlyDisplayedVisuals.ID == triggerMesh.ID)
+	if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
 	{
 		SaveTriggerTransform();
 	}
@@ -248,9 +242,9 @@ void UItemSlot::SaveTriggerTransform()
 	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
 	GEditor->RedrawLevelEditingViewports(true);
 
-	triggerMesh.RelativePosition = GetRelativeLocation();
-	triggerMesh.RelativeRotation = GetRelativeRotation();
-	triggerMesh.Scale = GetRelativeScale3D();
+	triggerVisuals.RelativePosition = GetRelativeLocation();
+	triggerVisuals.RelativeRotation = GetRelativeRotation();
+	triggerVisuals.Scale = GetRelativeScale3D();
 
 	if (GEngine)
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("Saved trigger mesh."));
@@ -304,7 +298,7 @@ void UItemSlot::E_ModifyTriggerShape()
 
 	currentlyDisplayedSlotableActor = nullptr;
 	E_SetVisibility(true);
-	E_SetPreviewVisuals(triggerMesh);
+	E_SetPreviewVisuals(triggerVisuals);
 
 	GEditor->SelectNone(false, true, false);
 	GEditor->SelectComponent(this, true, true, true);

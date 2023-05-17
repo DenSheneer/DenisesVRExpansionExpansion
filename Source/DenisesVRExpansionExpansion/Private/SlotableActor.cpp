@@ -20,6 +20,12 @@ void ASlotableActor::Tick(float deltaSeconds)
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
 	Super::OnGrip_Implementation(GrippingController, GripInformation);
+	currentGrippingController = GrippingController;
+
+	if (currentGrippingController->MotionSource == "left")
+		handSide = EControllerHand::Left;
+	else
+		handSide = EControllerHand::Right;
 
 	if (currentGripState == EItemGripState::slotted)
 	{
@@ -28,21 +34,19 @@ void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* Gripp
 		SetOwner(GrippingController->GetOwner());
 	}
 	currentGripState = EItemGripState::gripped;
-	currentGrippingController = GrippingController;
 	manualFindAvailableSlotsCall();
 }
 
 void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed)
 {
-
-	UItemSlot* nearestSlot = currentNearestSlot;
-	if (nearestSlot != nullptr)
+	if (currentNearestSlot != nullptr)
 	{
-		unsubscribeFromOccupiedEvent(nearestSlot);
-		if (nearestSlot->TryToReceiveActor(this))
+		unsubscribeFromOccupiedEvent(currentNearestSlot);
+		currentGripState = EItemGripState::slotted;
+
+		if (currentNearestSlot->TryToReceiveActor(this))
 		{
-			current_ResidingSlot = nearestSlot;
-			currentGripState = EItemGripState::slotted;
+			current_ResidingSlot = currentNearestSlot;
 		}
 		else
 			currentGripState = EItemGripState::loose;
@@ -65,8 +69,15 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 	{
 		for (int i = 0; i < nrOfOverlaps; i++)
 		{
-			auto itemSlot = Cast<UItemSlot>(overlappingComponents[i]);
-			handleSlotOverlap(itemSlot, true);
+			UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(overlappingComponents[i]);
+			if (castTo) 
+			{
+				UItemSlot* slot = castTo->AttachedTo();
+				if (slot)
+				{
+					handleSlotOverlap(slot, true);
+				}
+			}
 		}
 		refreshNearestSlot();
 	}
@@ -85,12 +96,7 @@ void ASlotableActor::refreshNearestSlot()
 
 		if (newNearest != nullptr)
 		{
-			EControllerHand handSide;
-			if (currentGrippingController->MotionSource == "left")
-				handSide = EControllerHand::Left;
-			else
-				handSide = EControllerHand::Right;
-
+			//UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), handSide);
 			newNearest->TryToReserve(this, handSide);
 		}
 		currentNearestSlot = newNearest;
@@ -124,30 +130,26 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 		}
 	return nullptr;
 }
-void ASlotableActor::ComponentOverlapBegin(UActorComponent* otherComponent)
+void ASlotableActor::ComponentOverlapBegin(UActorComponent* other)
 {
-	auto slotTriggerComponent = Cast<UPrimitiveComponent>(otherComponent);
-	if (slotTriggerComponent != nullptr)
-	{
-		UItemSlot* slot = Cast<UItemSlot>(slotTriggerComponent->GetAttachParent());
-		if (slot != nullptr)
-		{
-			handleSlotOverlap(slot);
-		}
-	}
+	UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(other);
+	if (!castTo) { return; }
+
+	UItemSlot* slot = castTo->AttachedTo();
+	if (!slot) { return; }
+
+	handleSlotOverlap(slot);
 }
-void ASlotableActor::ComponentOverlapEnd(UActorComponent* otherComponent)
+
+void ASlotableActor::ComponentOverlapEnd(UActorComponent* other)
 {
-	if (currentGripState == EItemGripState::gripped)
-	{
-		auto cast = Cast<UStaticMeshComponent>(otherComponent);
-		if (cast != nullptr)
-		{
-			auto itemSlot = Cast<UItemSlot>(cast->GetAttachParent());
-			if (itemSlot != nullptr)
-				removeSlotFromList(itemSlot);
-		}
-	}
+	UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(other);
+
+	if (!castTo) { return; }
+	UItemSlot* slot = castTo->AttachedTo();
+
+	if (!slot) { return; }
+	removeSlotFromList(slot);
 }
 
 void ASlotableActor::setupColliderRef()
@@ -178,7 +180,7 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 		{
 			currentlyAvailable_Slots.Remove(slotToRemove);
 		}
-		if (subscribedTo_Slots.Contains(slotToRemove))
+		if (AvailableEventHandles.Contains(slotToRemove))
 		{
 			unsubscribeFromAvailableEvent(slotToRemove);
 		}
@@ -205,17 +207,29 @@ void ASlotableActor::reset_GrippingParameters()
 	currentGrippingController = nullptr;
 	currentlyAvailable_Slots.Empty();
 	currentNearestSlot = nullptr;
-	for (int i = 0; i < subscribedTo_Slots.Num(); i++)
-		unsubscribeFromAvailableEvent(subscribedTo_Slots[i]);
+
+	TArray<UItemSlot*> keys;
+	for (const auto& Pair : AvailableEventHandles)
+	{
+		keys.Add(Pair.Key);
+	}
+	for (int32 Index = keys.Num() - 1; Index >= 0; --Index)
+	{
+		unsubscribeFromAvailableEvent(keys[Index]);
+	}
+	AvailableEventHandles.Empty();
 }
 
 void ASlotableActor::subscribeToSlotOccupiedEvent(UItemSlot* slot)
 {
 	OccupiedEventHandle = slot->OnOccupiedEvent.AddLambda([this](UItemSlot* pSlot)
 		{
-
 			this->removeSlotFromList(pSlot);
-			subscribeToSlotAvailableEvent(pSlot);
+
+			auto handle = AvailableEventHandles[pSlot];
+			if (handle.IsValid())
+				pSlot->OnAvailableEvent.Remove(handle);
+
 			unsubscribeFromOccupiedEvent(pSlot);
 		}
 	);
@@ -229,27 +243,28 @@ void ASlotableActor::unsubscribeFromOccupiedEvent(UItemSlot* slot)
 			OccupiedEventHandle.Reset();
 	}
 }
-
 void ASlotableActor::subscribeToSlotAvailableEvent(UItemSlot* slot)
 {
-	subscribedTo_Slots.Add(slot);
-	AvailableEventHandle = slot->OnAvailableEvent.AddLambda([this](UItemSlot* pSlot)
+	AvailableEventHandles.Add(slot, slot->OnAvailableEvent.AddLambda([&](UItemSlot* pSlot)
 		{
-			this->addSlotToList(pSlot);
-			unsubscribeFromAvailableEvent(pSlot);
-			subscribedTo_Slots.Remove(pSlot);
-		}
-	);
-}
+			if (!pSlot || !this) return;
 
+			this->unsubscribeFromAvailableEvent(pSlot);
+			this->addSlotToList(pSlot);
+		}
+	));
+
+	UE_LOG(LogTemp, Warning, TEXT("%s Should be subbed"), *this->GetName());
+}
 void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 {
-	if (subscribedTo_Slots.Contains(slot))
-	{
-		if (slot->OnAvailableEvent.Remove(AvailableEventHandle))
-		{
-			AvailableEventHandle.Reset();
-			subscribedTo_Slots.Remove(slot);
-		}
-	}
+	if (!slot) { return; }
+	if (!AvailableEventHandles.Contains(slot)) { return; }
+
+	auto handle = AvailableEventHandles[slot];
+	if (!handle.IsValid()) { return; }
+
+	UE_LOG(LogTemp, Warning, TEXT("%s Should be unsubbed"), *this->GetName());
+	slot->OnAvailableEvent.Remove(handle);
+	AvailableEventHandles.Remove(slot);
 }
