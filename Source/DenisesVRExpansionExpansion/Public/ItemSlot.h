@@ -8,6 +8,7 @@
 #include "SlotableActorVisuals.h"
 #include "ItemSlotState.h"
 #include "DetailCategoryBuilder.h"
+#include "ItemSlotTrigger.h"
 #include "ItemSlot.generated.h"
 
 class ASlotableActor;
@@ -25,7 +26,7 @@ protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
-		FSlotableActorVisuals triggerMesh;
+		FSlotableActorVisuals triggerVisuals;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
 		UMaterial* lefthandMaterial;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
@@ -79,7 +80,7 @@ public:
 	void ActorOutOfRangeEvent(ASlotableActor* actor);
 
 	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)
-		FSlotOccupiedEvent& OnOccupied(UItemSlot*) { return OnOccupiedEvent; }
+		FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
 
 	DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)
 		FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
@@ -92,7 +93,7 @@ private:
 	TSubclassOf<class ASlotableActor> currentlyDisplayedSlotableActor;
 
 	UStaticMeshComponent* previewMesh;
-	UStaticMeshComponent* trigger;
+	UItemSlotTrigger* trigger;
 
 	void setupTriggerComponent();
 	void setupMeshShapeComponent();
