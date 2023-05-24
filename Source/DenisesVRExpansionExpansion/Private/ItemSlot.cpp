@@ -5,10 +5,12 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "ItemSlotTrigger.h"
 #include "Editor/UnrealEd/Public/Editor.h"
+#include "Net/UnrealNetwork.h"
 #include "ItemSlotDetails.h"
 
 UItemSlot::UItemSlot()
 {
+	SetIsReplicatedByDefault(true);
 	PrimaryComponentTick.bCanEverTick = true;
 	triggerVisuals.ID = "trigger";
 }
@@ -17,17 +19,28 @@ void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
 
+	//if (this->GetOwner()->HasAuthority())
+	server_Setup();
+}
+
+void UItemSlot::server_Setup_Implementation()
+{
 	E_SetPreviewVisuals(triggerVisuals);
 
 	setupMeshShapeComponent();
 	setupTriggerComponent();
 
-	E_SetVisibility(false);
-	R_SetVisibility(false);
+
+	this->SetVisibility(false);
+	//previewMesh->SetVisibility(false);
+	//E_SetVisibility(false);
+	//R_SetVisibility(false);
 }
 
-void UItemSlot::R_SetPreviewVisuals(FSlotableActorVisuals visualProperties)
+void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualProperties)
 {
+	//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, FString::Printf(TEXT("%s"), *visualProperties.RelativePosition.ToString()));
+
 	if (previewMesh)
 	{
 		previewMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
@@ -80,41 +93,35 @@ void UItemSlot::E_SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 
 void UItemSlot::E_SetVisibility(bool hidden) { this->SetVisibility(hidden); }
 
-bool UItemSlot::TryToReceiveActor(ASlotableActor* actor)
+void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, EControllerHand handSide)
 {
-	if (actor == reservedForActor)
+	if (GetOwner()->GetLocalRole() == ROLE_Authority)
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("ReserveForActor"));
+	else
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("ReserveForActor"));
+
+	if (currentState == EItemSlotState::available)
 	{
-		actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-		actor->SetOwner(GetOwner());
-		actor->DisableComponentsSimulatePhysics();
-		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
-		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
-		actor->AttachToComponent(previewMesh, AttachmentRules);
-		R_SetVisibility(false);
-		reservedForActor = nullptr;
-		currentState = EItemSlotState::occupied;
-		OnOccupiedEvent.Broadcast(this);
-		return true;
+		int index = acceptedActors.IndexOfByKey(actor->GetClass());
+		if (index != INDEX_NONE)
+		{
+			setVisualsOnReservation(actor, handSide);
+		}
+		reservedForActor = actor;
+		currentState = EItemSlotState::reserved;
 	}
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
-
-	return false;
 }
-
-void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
+void UItemSlot::setVisualsOnReservation_Implementation(ASlotableActor* actor, EControllerHand handSide)
 {
-	actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-	currentState = EItemSlotState::available;
-	OnAvailableEvent.Broadcast(this);
-}
+	if (GetOwner()->GetLocalRole() == ROLE_Authority)
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("setVisualsOnReservation"));
+	else
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("setVisualsOnReservation"));
 
-void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handSide)
-{
 	if (visualsArray.Contains(actor->GetClass()))
 	{
-		FSlotableActorVisuals visuals = *visualsArray.Find(actor->GetClass());
-		R_SetPreviewVisuals(visuals);
+		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
+		R_SetPreviewVisuals(currentlyDisplayedVisuals);
 
 		switch (handSide)
 		{
@@ -129,20 +136,63 @@ void UItemSlot::reserveSlotForActor(ASlotableActor* actor, EControllerHand handS
 		}
 
 	}
-	reservedForActor = actor;
-	currentState = EItemSlotState::reserved;
-	R_SetVisibility(true);
+
+	previewMesh->SetVisibility(true);
+	//R_SetVisibility(true);
+}
+
+void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
+{
+	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, TEXT("Receive"));
+
+	if (actor == reservedForActor)
+	{
+		reservedForActor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		reservedForActor->SetOwner(GetOwner());
+		reservedForActor->DisableComponentsSimulatePhysics();
+		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
+		reservedForActor->AttachToComponent(previewMesh, AttachmentRules);
+		R_SetVisibility(false);
+		reservedForActor = nullptr;
+		currentState = EItemSlotState::occupied;
+		OnOccupiedEvent.Broadcast(this);
+	}
+	else
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
+}
+
+void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
+{
+	actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+	currentState = EItemSlotState::available;
+	OnAvailableEvent.Broadcast(this);
+}
+
+void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UItemSlot, triggerVisuals);
+	DOREPLIFETIME(UItemSlot, currentState);
+	DOREPLIFETIME(UItemSlot, reservedForActor);
+	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
+	DOREPLIFETIME(UItemSlot, previewMesh);
+	DOREPLIFETIME(UItemSlot, trigger);
 }
 
 void UItemSlot::setupTriggerComponent()
 {
 	trigger = NewObject<UItemSlotTrigger>(GetOwner(), FName(GetName() + "_triggerRoot"));
+	trigger->SetIsReplicated(true);
 	trigger->SetUp(this, triggerVisuals);
+	trigger->SetVisibility(false);
 }
 
 void UItemSlot::setupMeshShapeComponent()
 {
 	previewMesh = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMesh"));
+	previewMesh->SetIsReplicated(true);
 	previewMesh->SetUsingAbsoluteScale(true);
 
 	FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, false);
@@ -163,22 +213,6 @@ void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 		R_SetVisibility(false);
 		OnAvailableEvent.Broadcast(this);
 	}
-}
-
-bool UItemSlot::TryToReserve(ASlotableActor* actor, EControllerHand handSide)
-{
-	if (currentState == EItemSlotState::available)
-	{
-		int index = acceptedActors.IndexOfByKey(actor->GetClass());
-
-
-		if (index != INDEX_NONE)
-		{
-			reserveSlotForActor(actor, handSide);
-			return true;
-		}
-	}
-	return false;
 }
 
 void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

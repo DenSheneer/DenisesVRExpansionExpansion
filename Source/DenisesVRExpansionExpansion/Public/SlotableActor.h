@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Net/UnrealNetwork.h"
 #include "Components/SphereComponent.h"
 #include "Grippables/GrippableActor.h"
 #include "ItemGripState.h"
@@ -21,21 +22,23 @@ class ASlotableActor : public AGrippableActor
 	GENERATED_BODY()
 
 public:
+	ASlotableActor(const FObjectInitializer& ObjectInitializer);
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Static values", meta = (DisplayName = "Preview Mesh", MakeStructureDefaultValue = "C:/Program Files/Epic Games/UE_5.1/Engine/Content/BasicShapes/Cube.uasset"))
 		TObjectPtr<UStaticMesh> PreviewMesh;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Static values", meta = (DisplayName = "Scale", MakeStructureDefaultValue = "1.000000,1.000000,1.000000"))
 		FVector MeshScale;
 
 protected:
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
 		TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
 		UGripMotionControllerComponent* currentGrippingController = nullptr;
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
 	EControllerHand handSide = EControllerHand::AnyHand;
 
-	UItemSlot* current_ResidingSlot = nullptr;
-	UItemSlot* currentNearestSlot;
+	UPROPERTY(Replicated) UItemSlot* current_ResidingSlot = nullptr;
+	UPROPERTY(Replicated) UItemSlot* currentNearestSlot = nullptr;
 	TArray<UItemSlot*> currentlyAvailable_Slots;
 
 	virtual void BeginPlay() override;
@@ -44,13 +47,20 @@ protected:
 	virtual void OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed = false) override;
 	virtual void OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation) override;
 
+	UFUNCTION(Server, Reliable) void Server_GripRelease(UGripMotionControllerComponent* ReleasingController);
+	UFUNCTION(Server, Reliable) void Server_Grip(UGripMotionControllerComponent* GrippingController);
+
 	UFUNCTION(Blueprintcallable) void ComponentOverlapBegin(UActorComponent* other);
 	UFUNCTION(Blueprintcallable) void ComponentOverlapEnd(UActorComponent* other);
 
 private:
+	FColor debugColor;
 	void setupColliderRef();
 	void manualFindAvailableSlotsCall();
-	void refreshNearestSlot();
+
+	UFUNCTION(Server, Reliable) void refreshNearestSlot();
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
 	void handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefresh = false);
 	void removeSlotFromList(UItemSlot* slotToRemove);
 	void addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh = false);
