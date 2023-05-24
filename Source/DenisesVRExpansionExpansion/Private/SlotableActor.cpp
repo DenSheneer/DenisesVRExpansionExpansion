@@ -202,6 +202,10 @@ void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ASlotableActor, currentGripState);
+	DOREPLIFETIME(ASlotableActor, currentGrippingController);
+	DOREPLIFETIME(ASlotableActor, handSide);
+	DOREPLIFETIME(ASlotableActor, current_ResidingSlot);
+	DOREPLIFETIME(ASlotableActor, currentNearestSlot);
 }
 
 void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefreshFlag)
@@ -210,7 +214,7 @@ void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNear
 	{
 		if (currentGripState == EItemGripState::gripped)
 		{
-			if (overlappingSlot != nullptr && overlappingSlot->CheckForCompatibility(this))
+			if (overlappingSlot->CheckForCompatibility(this))
 				if (overlappingSlot->SlotState() == EItemSlotState::available)
 					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
 				else

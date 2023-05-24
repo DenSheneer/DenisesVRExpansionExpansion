@@ -169,18 +169,6 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 	OnAvailableEvent.Broadcast(this);
 }
 
-void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME(UItemSlot, triggerVisuals);
-	DOREPLIFETIME(UItemSlot, currentState);
-	DOREPLIFETIME(UItemSlot, reservedForActor);
-	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
-	DOREPLIFETIME(UItemSlot, previewMesh);
-	DOREPLIFETIME(UItemSlot, trigger);
-}
-
 void UItemSlot::setupTriggerComponent()
 {
 	trigger = NewObject<UItemSlotTrigger>(GetOwner(), FName(GetName() + "_triggerRoot"));
@@ -398,6 +386,18 @@ void UItemSlot::PostEditComponentMove(bool bFinished)
 		SaveEdit();
 
 	Super::PostEditComponentMove(bFinished);
+}
+
+void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UItemSlot, triggerVisuals);
+	DOREPLIFETIME(UItemSlot, currentState);
+	DOREPLIFETIME(UItemSlot, reservedForActor);
+	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
+	DOREPLIFETIME(UItemSlot, previewMesh);
+	DOREPLIFETIME(UItemSlot, trigger);
 }
 
 
