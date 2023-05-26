@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "ItemSlot.h"
 #include "ItemSlotTrigger.h"
+#include "ItemSlot.h"
 
 void UItemSlotTrigger::SetUp(UItemSlot* pAttachedTo, FSlotableActorVisuals visuals)
 {

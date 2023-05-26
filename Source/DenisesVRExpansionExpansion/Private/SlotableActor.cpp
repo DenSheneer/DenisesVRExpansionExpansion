@@ -2,11 +2,23 @@
 
 #include "SlotableActor.h"
 #include "GripMotionControllerComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "ItemGripState.h"
+
+ASlotableActor::ASlotableActor(const FObjectInitializer& ObjectInitializer) : AGrippableActor(ObjectInitializer)
+{
+	bReplicates = true;
+}
 
 void ASlotableActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (GetNetMode() == ENetMode::NM_Client)
+		debugColor = FColor::Red;
+	else
+		debugColor = FColor::Green;
+
 	setupColliderRef();
 }
 void ASlotableActor::Tick(float deltaSeconds)
@@ -14,12 +26,34 @@ void ASlotableActor::Tick(float deltaSeconds)
 	Super::Tick(deltaSeconds);
 
 	if (currentlyAvailable_Slots.Num() > 1 && currentGripState == EItemGripState::gripped)
+	{
+		if (!HasAuthority()) { return; }
 		refreshNearestSlot();
+	}
 }
 
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
 	Super::OnGrip_Implementation(GrippingController, GripInformation);
+	auto owner = GrippingController->GetOwner();
+	if (!owner) { return; }
+	this->SetOwner(owner);
+
+	if (!HasAuthority()) { return; }
+	UE_LOG(LogTemp, Warning, TEXT("Owner: %s"), *GetOwner()->GetName());
+	Server_Grip(GrippingController);
+}
+
+void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed)
+{
+	if (HasAuthority())
+		Server_GripRelease(ReleasingController);
+
+	Super::OnGripRelease_Implementation(ReleasingController, GripInformation, bWasSocketed);
+}
+
+void ASlotableActor::Server_Grip_Implementation(UGripMotionControllerComponent* GrippingController)
+{
 	currentGrippingController = GrippingController;
 
 	if (currentGrippingController->MotionSource == "left")
@@ -37,25 +71,22 @@ void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* Gripp
 	manualFindAvailableSlotsCall();
 }
 
-void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed)
+
+void ASlotableActor::Server_GripRelease_Implementation(UGripMotionControllerComponent* ReleasingController)
 {
 	if (currentNearestSlot != nullptr)
 	{
 		unsubscribeFromOccupiedEvent(currentNearestSlot);
 		currentGripState = EItemGripState::slotted;
 
-		if (currentNearestSlot->TryToReceiveActor(this))
-		{
-			current_ResidingSlot = currentNearestSlot;
-		}
-		else
-			currentGripState = EItemGripState::loose;
+		currentNearestSlot->ReceiveActor(this);
+
+		current_ResidingSlot = currentNearestSlot;
 	}
 	else
 		currentGripState = EItemGripState::loose;
 
 	reset_GrippingParameters();
-	Super::OnGripRelease_Implementation(ReleasingController, GripInformation, bWasSocketed);
 }
 
 void ASlotableActor::manualFindAvailableSlotsCall()
@@ -70,7 +101,7 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 		for (int i = 0; i < nrOfOverlaps; i++)
 		{
 			UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(overlappingComponents[i]);
-			if (castTo) 
+			if (castTo)
 			{
 				UItemSlot* slot = castTo->AttachedTo();
 				if (slot)
@@ -79,11 +110,19 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 				}
 			}
 		}
-		refreshNearestSlot();
+		if (HasAuthority())
+			refreshNearestSlot();
+		else
+			GEngine->AddOnScreenDebugMessage(-1, 1.5f, debugColor, TEXT("Did not run, no authority"));
 	}
 }
-void ASlotableActor::refreshNearestSlot()
+void ASlotableActor::refreshNearestSlot_Implementation()
 {
+	if (GetLocalRole() == ROLE_Authority)
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("refreshNearestSlot"));
+	else
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("refreshNearestSlot"));
+
 	UItemSlot* newNearest = findNearestSlot(currentlyAvailable_Slots);
 	if (newNearest != currentNearestSlot)
 	{
@@ -91,13 +130,14 @@ void ASlotableActor::refreshNearestSlot()
 		{
 			unsubscribeFromOccupiedEvent(currentNearestSlot);
 			unsubscribeFromAvailableEvent(currentNearestSlot);
+
 			currentNearestSlot->ActorOutOfRangeEvent(this);
 		}
 
 		if (newNearest != nullptr)
 		{
-			//UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), handSide);
-			newNearest->TryToReserve(this, handSide);
+			if (HasAuthority())
+				newNearest->ReserveForActor(this, handSide);
 		}
 		currentNearestSlot = newNearest;
 	}
@@ -157,13 +197,24 @@ void ASlotableActor::setupColliderRef()
 	triggerComponent = FindComponentByClass<USphereComponent>();
 }
 
+void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ASlotableActor, currentGripState);
+	DOREPLIFETIME(ASlotableActor, currentGrippingController);
+	DOREPLIFETIME(ASlotableActor, handSide);
+	DOREPLIFETIME(ASlotableActor, current_ResidingSlot);
+	DOREPLIFETIME(ASlotableActor, currentNearestSlot);
+}
+
 void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefreshFlag)
 {
 	if (overlappingSlot != nullptr)
 	{
 		if (currentGripState == EItemGripState::gripped)
 		{
-			if (overlappingSlot != nullptr && overlappingSlot->CheckForCompatibility(this))
+			if (overlappingSlot->CheckForCompatibility(this))
 				if (overlappingSlot->SlotState() == EItemSlotState::available)
 					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
 				else
@@ -184,6 +235,7 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 		{
 			unsubscribeFromAvailableEvent(slotToRemove);
 		}
+
 		if (slotToRemove == currentNearestSlot)
 			refreshNearestSlot();
 	}
@@ -191,15 +243,16 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 
 void ASlotableActor::addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh)
 {
-	if (slotToAdd != nullptr)
+	if (!slotToAdd) { return; }
+
+	if (!currentlyAvailable_Slots.Contains(slotToAdd))
 	{
-		if (!currentlyAvailable_Slots.Contains(slotToAdd))
-		{
-			currentlyAvailable_Slots.Add(slotToAdd);
-		}
-		if (!skipNearestRefresh)
-			refreshNearestSlot();
+		currentlyAvailable_Slots.Add(slotToAdd);
 	}
+
+	if (skipNearestRefresh) { return; }
+	if (!HasAuthority()) { return; }
+	refreshNearestSlot();
 }
 
 void ASlotableActor::reset_GrippingParameters()
