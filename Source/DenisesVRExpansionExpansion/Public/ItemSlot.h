@@ -28,6 +28,9 @@ protected:
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
 		FSlotableActorVisuals triggerVisuals;
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
+		FSlotableActorVisuals rootVisuals;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
 		UMaterial* lefthandMaterial;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
@@ -45,6 +48,7 @@ protected:
 		FSlotableActorVisuals currentlyDisplayedVisuals;
 
 	void SaveEdit();
+	void SaveRootTransform();
 	void SaveMeshTransform();
 	void SaveTriggerTransform();
 
@@ -53,13 +57,16 @@ public:
 	//	(E)ditor functions
 	void E_TogglePreviewVisibility();
 	void E_ReloadVisuals();
-	void E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visuals);
+	void E_ModifyRootComponent();
 	void E_ModifyTriggerShape();
+	void E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visuals);
 	void E_SetPreviewVisuals(FSlotableActorVisuals visualProperties);
 	void E_SetVisibility(bool hidden);
+	void E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> visuals);
+	void E_ResetTriggerMeshToRootTransform();
 
 	// (R)untime functions
-	UFUNCTION(NetMulticast, Reliable) void R_SetPreviewVisuals(FSlotableActorVisuals visualProperties);
+	UFUNCTION(NetMulticast, Reliable) void R_SetPreviewVisuals(FSlotableActorVisuals visualProperties, EControllerHand handside);
 	void R_SetVisibility(bool hidden);
 
 	bool CheckForCompatibility(ASlotableActor* actor);
@@ -89,6 +96,7 @@ public:
 
 	FSlotOccupiedEvent OnOccupiedEvent;
 	FSlotAvailableEvent OnAvailableEvent;
+	UPROPERTY(Replicated, BlueprintReadOnly, EditAnywhere)	USphereComponent* transformRoot;
 
 private:
 	UFUNCTION(Server, Reliable) void setVisualsOnReservation(ASlotableActor* actor, EControllerHand handSide);

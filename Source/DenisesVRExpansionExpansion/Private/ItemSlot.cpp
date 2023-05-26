@@ -13,6 +13,10 @@ UItemSlot::UItemSlot()
 	SetIsReplicatedByDefault(true);
 	PrimaryComponentTick.bCanEverTick = true;
 	triggerVisuals.ID = "trigger";
+
+	rootVisuals.ID = "root";
+	FSoftObjectPath AssetRef(TEXT("/Engine/Content/ArtTools/RenderToTexture/Meshes/S_1_Unit_Sphere.uasset"));
+	rootVisuals.Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *AssetRef.ToString()));
 }
 
 void UItemSlot::BeginPlay()
@@ -32,12 +36,9 @@ void UItemSlot::server_Setup_Implementation()
 
 
 	this->SetVisibility(false);
-	//previewMesh->SetVisibility(false);
-	//E_SetVisibility(false);
-	//R_SetVisibility(false);
 }
 
-void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualProperties)
+void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualProperties, EControllerHand handSide)
 {
 	//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, FString::Printf(TEXT("%s"), *visualProperties.RelativePosition.ToString()));
 
@@ -52,6 +53,19 @@ void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualP
 		previewMesh->SetMaterial(0, visualProperties.PreviewMaterial);
 		previewMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 		previewMesh->AttachToComponent(this, FAttachmentTransformRules::KeepWorldTransform);
+
+		switch (handSide)
+		{
+		case EControllerHand::Left:
+			previewMesh->SetMaterial(0, lefthandMaterial);
+			break;
+		case EControllerHand::Right:
+			previewMesh->SetMaterial(0, rightHandMaterial);
+			break;
+		case EControllerHand::AnyHand:
+			return;
+			break;
+		}
 	}
 }
 
@@ -93,6 +107,45 @@ void UItemSlot::E_SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 
 void UItemSlot::E_SetVisibility(bool hidden) { this->SetVisibility(hidden); }
 
+void UItemSlot::E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> visuals)
+{
+	if (visualsArray.Contains(visuals))
+	{
+		if (currentlyDisplayedSlotableActor == visuals)
+		{
+			SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
+
+			FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+			GEditor->RedrawLevelEditingViewports(true);
+
+			GEditor->SelectNone(false, true, false);
+			GEditor->SelectComponent(this, true, true, true);
+			GEditor->RedrawAllViewports(true);
+		}
+
+		auto visualsToReset = visualsArray[visuals];
+		visualsToReset.RelativePosition = rootVisuals.RelativePosition;
+		visualsToReset.RelativeRotation = rootVisuals.RelativeRotation;
+	}
+}
+
+void UItemSlot::E_ResetTriggerMeshToRootTransform()
+{
+	if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
+	{
+		SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
+
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+
+		GEditor->SelectNone(false, true, false);
+		GEditor->SelectComponent(this, true, true, true);
+		GEditor->RedrawAllViewports(true);
+	}
+	triggerVisuals.RelativePosition = rootVisuals.RelativePosition;
+	triggerVisuals.RelativeRotation = rootVisuals.RelativeRotation;
+}
+
 void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, EControllerHand handSide)
 {
 	if (GetOwner()->GetLocalRole() == ROLE_Authority)
@@ -113,32 +166,12 @@ void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, EControlle
 }
 void UItemSlot::setVisualsOnReservation_Implementation(ASlotableActor* actor, EControllerHand handSide)
 {
-	if (GetOwner()->GetLocalRole() == ROLE_Authority)
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("setVisualsOnReservation"));
-	else
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("setVisualsOnReservation"));
-
 	if (visualsArray.Contains(actor->GetClass()))
 	{
 		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
-		R_SetPreviewVisuals(currentlyDisplayedVisuals);
-
-		switch (handSide)
-		{
-		case EControllerHand::Left:
-			SetMaterial(0, lefthandMaterial);
-			break;
-		case EControllerHand::Right:
-			SetMaterial(0, rightHandMaterial);
-			break;
-		default:
-			break;
-		}
-
+		R_SetPreviewVisuals(currentlyDisplayedVisuals, handSide);
 	}
-
 	previewMesh->SetVisibility(true);
-	//R_SetVisibility(true);
 }
 
 void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
@@ -234,13 +267,27 @@ void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visu
 void UItemSlot::SaveEdit()
 {
 	//UE_LOG(LogTemp, Warning, TEXT("%s"), currentlyDisplayedVisuals);
-
-	if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
-	{
+	if (currentlyDisplayedVisuals.ID == rootVisuals.ID)
+		SaveRootTransform();
+	else if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
 		SaveTriggerTransform();
-	}
 	else
 		SaveMeshTransform();
+}
+
+void UItemSlot::SaveRootTransform()
+{
+	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+	GEditor->RedrawLevelEditingViewports(true);
+
+	rootVisuals.RelativePosition = GetRelativeLocation();
+	rootVisuals.RelativeRotation = GetRelativeRotation();
+	rootVisuals.Scale = GetRelativeScale3D();
+
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("Saved root."));
+
+	UE_LOG(LogTemp, Log, TEXT("Saved root."));
 }
 
 void UItemSlot::SaveMeshTransform()
@@ -293,8 +340,8 @@ void UItemSlot::E_ReloadVisuals()
 			gfx.ID = acceptedActors[i]->GetName();
 			gfx.Mesh = obj->PreviewMesh;
 			gfx.Scale = obj->MeshScale;
-			gfx.RelativePosition = GetRelativeLocation();
-			gfx.RelativeRotation = FRotator::ZeroRotator;
+			gfx.RelativePosition = rootVisuals.RelativePosition;
+			gfx.RelativeRotation = rootVisuals.RelativeRotation;
 
 			visualsArray.Add(acceptedActors[i], gfx);
 		}
@@ -307,10 +354,19 @@ void UItemSlot::E_ReloadVisuals()
 		Package->SetDirtyFlag(true);
 	}
 
-	E_ModifyTriggerShape();
+	E_ModifyRootComponent();
+}
 
-	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-	GEditor->RedrawLevelEditingViewports(true);
+void UItemSlot::E_ModifyRootComponent()
+{
+	SaveEdit();
+
+	currentlyDisplayedSlotableActor = nullptr;
+	E_SetVisibility(true);
+	E_SetPreviewVisuals(rootVisuals);
+
+	GEditor->SelectNone(false, true, false);
+	GEditor->SelectComponent(this, true, true, true);
 	GEditor->RedrawAllViewports(true);
 }
 
