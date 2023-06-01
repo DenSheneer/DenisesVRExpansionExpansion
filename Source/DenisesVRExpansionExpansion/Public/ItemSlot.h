@@ -26,34 +26,35 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
-		FSlotableActorVisuals triggerVisuals;
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
-		FSlotableActorVisuals rootVisuals;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
+		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> visualsArray;
+
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals rootVisuals;
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals currentlyDisplayedVisuals;
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals triggerVisuals;
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	TSubclassOf<class ASlotableActor> currentlyDisplayedSlotableActor;
+
+	UPROPERTY(Replicated)	TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
+	UPROPERTY(Replicated)	AActor* reservedForActor;
+	UPROPERTY(Replicated)	USphereComponent* transformRoot;
+	UPROPERTY(Replicated)	UStaticMeshComponent* previewMesh;
+	UPROPERTY(Replicated)	UItemSlotTrigger* trigger;
+
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
 		UMaterial* lefthandMaterial;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
 		UMaterial* rightHandMaterial;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "5"))
-		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> visualsArray;
-
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
-
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		AActor* reservedForActor;
-
-	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Debug")
-		FSlotableActorVisuals currentlyDisplayedVisuals;
 
 	void SaveEdit();
 	void SaveRootTransform();
 	void SaveMeshTransform();
 	void SaveTriggerTransform();
 
-
 public:
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
 	//	(E)ditor functions
 	void E_TogglePreviewVisibility();
 	void E_ReloadVisuals();
@@ -67,21 +68,11 @@ public:
 
 	// (R)untime functions
 	UFUNCTION(NetMulticast, Reliable) void R_SetPreviewVisuals(FSlotableActorVisuals visualProperties, EControllerHand handside);
-	void R_SetVisibility(bool hidden);
 
 	bool CheckForCompatibility(ASlotableActor* actor);
 
 	UFUNCTION(Server, Reliable) void ReserveForActor(ASlotableActor* actor, EControllerHand handSide);
 
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
-		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
-
-#if WITH_EDITOR
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
-	virtual void PostEditComponentMove(bool bFinished) override;
-#endif
 	UFUNCTION(NetMulticast, Reliable)	void ReceiveActor(ASlotableActor* actor);
 
 	void RemoveSlotableActor(ASlotableActor* actor);
@@ -96,19 +87,25 @@ public:
 
 	FSlotOccupiedEvent OnOccupiedEvent;
 	FSlotAvailableEvent OnAvailableEvent;
-	UPROPERTY(Replicated, BlueprintReadOnly, EditAnywhere)	USphereComponent* transformRoot;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
+		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
+	virtual void PostEditComponentMove(bool bFinished) override;
+#endif
 
 private:
 	UFUNCTION(Server, Reliable) void setVisualsOnReservation(ASlotableActor* actor, EControllerHand handSide);
-	TSubclassOf<class ASlotableActor> currentlyDisplayedSlotableActor;
 
-	UPROPERTY(Replicated)	UStaticMeshComponent* previewMesh;
-	UPROPERTY(Replicated)	UItemSlotTrigger* trigger;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	//UFUNCTION(Server, Reliable)
+	void addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor);
+	void removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor);
 	void setupTriggerComponent();
-	//UFUNCTION(Server, Reliable)
 	void setupMeshShapeComponent();
 
 	UFUNCTION(NetMulticast, Reliable)

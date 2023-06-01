@@ -69,8 +69,6 @@ void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualP
 	}
 }
 
-void UItemSlot::R_SetVisibility(bool hidden) { previewMesh->SetVisibility(hidden); }
-
 bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
 {
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
@@ -186,7 +184,7 @@ void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
 		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
 		reservedForActor->AttachToComponent(previewMesh, AttachmentRules);
-		R_SetVisibility(false);
+		previewMesh->SetVisibility(false);
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
@@ -231,7 +229,7 @@ void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 	{
 		currentState = EItemSlotState::available;
 		reservedForActor = nullptr;
-		R_SetVisibility(false);
+		previewMesh->SetVisibility(false);
 		OnAvailableEvent.Broadcast(this);
 	}
 }
@@ -243,7 +241,6 @@ void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompon
 
 void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visualsInAcceptedActors)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), *visuals->GetName());
 	SaveEdit();
 
 	if (visualsArray.Contains(visualsInAcceptedActors))
@@ -259,9 +256,7 @@ void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visu
 		GEditor->RedrawAllViewports(true);
 	}
 	else
-	{
 		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visualsInAcceptedActors->GetName());
-	}
 }
 
 void UItemSlot::SaveEdit()
@@ -335,23 +330,10 @@ void UItemSlot::E_ReloadVisuals()
 	{
 		if (acceptedActors[i]->IsValidLowLevel())
 		{
-			FSlotableActorVisuals gfx;
-			auto obj = acceptedActors[i].GetDefaultObject();
-			gfx.ID = acceptedActors[i]->GetName();
-			gfx.Mesh = obj->PreviewMesh;
-			gfx.Scale = obj->MeshScale;
-			gfx.RelativePosition = rootVisuals.RelativePosition;
-			gfx.RelativeRotation = rootVisuals.RelativeRotation;
-
-			visualsArray.Add(acceptedActors[i], gfx);
+			addActorToVisualArray(acceptedActors[i]);
 		}
 		else
 			acceptedActors.RemoveAt(i);
-	}
-	UPackage* Package = this->GetOutermost();
-	if (Package != nullptr)
-	{
-		Package->SetDirtyFlag(true);
 	}
 
 	E_ModifyRootComponent();
@@ -387,53 +369,50 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 {
 	SaveEdit();
 
+	// Check if the modified property is the ItemSlots array
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(UItemSlot, acceptedActors))
+	{
+		int32 ModifiedIndex = PropertyChangedEvent.GetArrayIndex(PropertyName.ToString());
+		if (!acceptedActors.IsValidIndex(ModifiedIndex))
+		{
+			TArray<TSubclassOf<ASlotableActor>> keys;
+			visualsArray.GetKeys(keys);
+
+			for (int i = 0; i < keys.Num(); i++)
+			{
+				if (acceptedActors.Contains(keys[i])) { continue; }
+
+				if (currentlyDisplayedSlotableActor == keys[i])
+					E_ModifyRootComponent();
+
+				if (visualsArray.Contains(keys[i]))
+					visualsArray.Remove(keys[i]);
+			}
+		}
+		else
+		{
+			TSubclassOf<ASlotableActor>& ModifiedActor = acceptedActors[ModifiedIndex];
+			if (!ModifiedActor) { return; }
+
+			if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayRemove)
+			{
+				removeActorFromVisualsArray(ModifiedActor);
+				UE_LOG(LogTemp, Warning, TEXT("array index removed"));
+			}
+			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
+				addActorToVisualArray(acceptedActors[ModifiedIndex]);
+
+		}
+	}
+
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
 
 void UItemSlot::PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent)
 {
 	SaveEdit();
-
 	Super::PostEditChangeChainProperty(PropertyChangedEvent);
-
-	// Check if the modified property is the ItemSlots array
-	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
-	if (PropertyName == GET_MEMBER_NAME_CHECKED(UItemSlot, acceptedActors))
-	{
-		// Check what specifically changed in the array
-		int32 ModifiedIndices = PropertyChangedEvent.GetNumObjectsBeingEdited();
-		// The array was modified, check which items were added, removed, or modified
-		for (int32 i = 0; i < ModifiedIndices; i++)
-		{
-			if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayAdd)
-			{
-				// An item was added to the array
-				auto AddedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
-				if (AddedObject)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Property was added"));
-				}
-			}
-			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayRemove)
-			{
-				// An item was removed from the array
-				auto RemovedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
-				if (RemovedObject)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Property was removed"));
-				}
-			}
-			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
-			{
-				// An item in the array was modified
-				auto ModifiedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
-				if (ModifiedObject)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Property was edited"));
-				}
-			}
-		}
-	}
 }
 
 void UItemSlot::PostEditComponentMove(bool bFinished)
@@ -454,6 +433,39 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
 	DOREPLIFETIME(UItemSlot, previewMesh);
 	DOREPLIFETIME(UItemSlot, trigger);
+}
+
+void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor)
+{
+	FSlotableActorVisuals gfx;
+	auto obj = newActor.GetDefaultObject();
+	gfx.ID = newActor->GetName();
+	gfx.Mesh = obj->PreviewMesh;
+	gfx.Scale = obj->MeshScale;
+	gfx.RelativePosition = rootVisuals.RelativePosition;
+	gfx.RelativeRotation = rootVisuals.RelativeRotation;
+
+	if (!visualsArray.Contains(newActor))
+	{
+		visualsArray.Add(newActor, gfx);
+	}
+	else
+	{
+		visualsArray[newActor] = gfx;
+	}
+
+	E_ModifyAcceptedActorMesh(newActor);
+}
+
+void UItemSlot::removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor)
+{
+	if (visualsArray.Contains(removeActor))
+	{
+		if (currentlyDisplayedVisuals.ID == visualsArray[removeActor].ID)
+			E_ModifyRootComponent();
+
+		visualsArray.Remove(removeActor);
+	}
 }
 
 
