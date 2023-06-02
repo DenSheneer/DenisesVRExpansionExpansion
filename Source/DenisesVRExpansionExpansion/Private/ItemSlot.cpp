@@ -13,6 +13,10 @@ UItemSlot::UItemSlot()
 	SetIsReplicatedByDefault(true);
 	PrimaryComponentTick.bCanEverTick = true;
 	triggerVisuals.ID = "trigger";
+
+	rootVisuals.ID = "root";
+	FSoftObjectPath AssetRef(TEXT("/Engine/Content/ArtTools/RenderToTexture/Meshes/S_1_Unit_Sphere.uasset"));
+	rootVisuals.Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *AssetRef.ToString()));
 }
 
 void UItemSlot::BeginPlay()
@@ -32,12 +36,9 @@ void UItemSlot::server_Setup_Implementation()
 
 
 	this->SetVisibility(false);
-	//previewMesh->SetVisibility(false);
-	//E_SetVisibility(false);
-	//R_SetVisibility(false);
 }
 
-void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualProperties)
+void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualProperties, EControllerHand handSide)
 {
 	//GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, FString::Printf(TEXT("%s"), *visualProperties.RelativePosition.ToString()));
 
@@ -52,10 +53,21 @@ void UItemSlot::R_SetPreviewVisuals_Implementation(FSlotableActorVisuals visualP
 		previewMesh->SetMaterial(0, visualProperties.PreviewMaterial);
 		previewMesh->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 		previewMesh->AttachToComponent(this, FAttachmentTransformRules::KeepWorldTransform);
+
+		switch (handSide)
+		{
+		case EControllerHand::Left:
+			previewMesh->SetMaterial(0, lefthandMaterial);
+			break;
+		case EControllerHand::Right:
+			previewMesh->SetMaterial(0, rightHandMaterial);
+			break;
+		case EControllerHand::AnyHand:
+			return;
+			break;
+		}
 	}
 }
-
-void UItemSlot::R_SetVisibility(bool hidden) { previewMesh->SetVisibility(hidden); }
 
 bool UItemSlot::CheckForCompatibility(ASlotableActor* actor)
 {
@@ -93,6 +105,45 @@ void UItemSlot::E_SetPreviewVisuals(FSlotableActorVisuals visualProperties)
 
 void UItemSlot::E_SetVisibility(bool hidden) { this->SetVisibility(hidden); }
 
+void UItemSlot::E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> visuals)
+{
+	if (visualsArray.Contains(visuals))
+	{
+		if (currentlyDisplayedSlotableActor == visuals)
+		{
+			SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
+
+			FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+			GEditor->RedrawLevelEditingViewports(true);
+
+			GEditor->SelectNone(false, true, false);
+			GEditor->SelectComponent(this, true, true, true);
+			GEditor->RedrawAllViewports(true);
+		}
+
+		auto visualsToReset = visualsArray[visuals];
+		visualsToReset.RelativePosition = rootVisuals.RelativePosition;
+		visualsToReset.RelativeRotation = rootVisuals.RelativeRotation;
+	}
+}
+
+void UItemSlot::E_ResetTriggerMeshToRootTransform()
+{
+	if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
+	{
+		SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
+
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+
+		GEditor->SelectNone(false, true, false);
+		GEditor->SelectComponent(this, true, true, true);
+		GEditor->RedrawAllViewports(true);
+	}
+	triggerVisuals.RelativePosition = rootVisuals.RelativePosition;
+	triggerVisuals.RelativeRotation = rootVisuals.RelativeRotation;
+}
+
 void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, EControllerHand handSide)
 {
 	if (GetOwner()->GetLocalRole() == ROLE_Authority)
@@ -113,32 +164,12 @@ void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, EControlle
 }
 void UItemSlot::setVisualsOnReservation_Implementation(ASlotableActor* actor, EControllerHand handSide)
 {
-	if (GetOwner()->GetLocalRole() == ROLE_Authority)
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("setVisualsOnReservation"));
-	else
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("setVisualsOnReservation"));
-
 	if (visualsArray.Contains(actor->GetClass()))
 	{
 		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
-		R_SetPreviewVisuals(currentlyDisplayedVisuals);
-
-		switch (handSide)
-		{
-		case EControllerHand::Left:
-			SetMaterial(0, lefthandMaterial);
-			break;
-		case EControllerHand::Right:
-			SetMaterial(0, rightHandMaterial);
-			break;
-		default:
-			break;
-		}
-
+		R_SetPreviewVisuals(currentlyDisplayedVisuals, handSide);
 	}
-
 	previewMesh->SetVisibility(true);
-	//R_SetVisibility(true);
 }
 
 void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
@@ -153,7 +184,7 @@ void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
 		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
 		reservedForActor->AttachToComponent(previewMesh, AttachmentRules);
-		R_SetVisibility(false);
+		previewMesh->SetVisibility(false);
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
@@ -198,7 +229,7 @@ void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 	{
 		currentState = EItemSlotState::available;
 		reservedForActor = nullptr;
-		R_SetVisibility(false);
+		previewMesh->SetVisibility(false);
 		OnAvailableEvent.Broadcast(this);
 	}
 }
@@ -210,7 +241,6 @@ void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompon
 
 void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visualsInAcceptedActors)
 {
-	//UE_LOG(LogTemp, Warning, TEXT("visuals: '%s'"), *visuals->GetName());
 	SaveEdit();
 
 	if (visualsArray.Contains(visualsInAcceptedActors))
@@ -226,21 +256,33 @@ void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visu
 		GEditor->RedrawAllViewports(true);
 	}
 	else
-	{
 		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visualsInAcceptedActors->GetName());
-	}
 }
 
 void UItemSlot::SaveEdit()
 {
 	//UE_LOG(LogTemp, Warning, TEXT("%s"), currentlyDisplayedVisuals);
-
-	if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
-	{
+	if (currentlyDisplayedVisuals.ID == rootVisuals.ID)
+		SaveRootTransform();
+	else if (currentlyDisplayedVisuals.ID == triggerVisuals.ID)
 		SaveTriggerTransform();
-	}
 	else
 		SaveMeshTransform();
+}
+
+void UItemSlot::SaveRootTransform()
+{
+	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+	GEditor->RedrawLevelEditingViewports(true);
+
+	rootVisuals.RelativePosition = GetRelativeLocation();
+	rootVisuals.RelativeRotation = GetRelativeRotation();
+	rootVisuals.Scale = GetRelativeScale3D();
+
+	if (GEngine)
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("Saved root."));
+
+	UE_LOG(LogTemp, Log, TEXT("Saved root."));
 }
 
 void UItemSlot::SaveMeshTransform()
@@ -288,29 +330,25 @@ void UItemSlot::E_ReloadVisuals()
 	{
 		if (acceptedActors[i]->IsValidLowLevel())
 		{
-			FSlotableActorVisuals gfx;
-			auto obj = acceptedActors[i].GetDefaultObject();
-			gfx.ID = acceptedActors[i]->GetName();
-			gfx.Mesh = obj->PreviewMesh;
-			gfx.Scale = obj->MeshScale;
-			gfx.RelativePosition = GetRelativeLocation();
-			gfx.RelativeRotation = FRotator::ZeroRotator;
-
-			visualsArray.Add(acceptedActors[i], gfx);
+			addActorToVisualArray(acceptedActors[i]);
 		}
 		else
 			acceptedActors.RemoveAt(i);
 	}
-	UPackage* Package = this->GetOutermost();
-	if (Package != nullptr)
-	{
-		Package->SetDirtyFlag(true);
-	}
 
-	E_ModifyTriggerShape();
+	E_ModifyRootComponent();
+}
 
-	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-	GEditor->RedrawLevelEditingViewports(true);
+void UItemSlot::E_ModifyRootComponent()
+{
+	SaveEdit();
+
+	currentlyDisplayedSlotableActor = nullptr;
+	E_SetVisibility(true);
+	E_SetPreviewVisuals(rootVisuals);
+
+	GEditor->SelectNone(false, true, false);
+	GEditor->SelectComponent(this, true, true, true);
 	GEditor->RedrawAllViewports(true);
 }
 
@@ -331,53 +369,50 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 {
 	SaveEdit();
 
+	// Check if the modified property is the ItemSlots array
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(UItemSlot, acceptedActors))
+	{
+		int32 ModifiedIndex = PropertyChangedEvent.GetArrayIndex(PropertyName.ToString());
+		if (!acceptedActors.IsValidIndex(ModifiedIndex))
+		{
+			TArray<TSubclassOf<ASlotableActor>> keys;
+			visualsArray.GetKeys(keys);
+
+			for (int i = 0; i < keys.Num(); i++)
+			{
+				if (acceptedActors.Contains(keys[i])) { continue; }
+
+				if (currentlyDisplayedSlotableActor == keys[i])
+					E_ModifyRootComponent();
+
+				if (visualsArray.Contains(keys[i]))
+					visualsArray.Remove(keys[i]);
+			}
+		}
+		else
+		{
+			TSubclassOf<ASlotableActor>& ModifiedActor = acceptedActors[ModifiedIndex];
+			if (!ModifiedActor) { return; }
+
+			if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayRemove)
+			{
+				removeActorFromVisualsArray(ModifiedActor);
+				UE_LOG(LogTemp, Warning, TEXT("array index removed"));
+			}
+			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
+				addActorToVisualArray(acceptedActors[ModifiedIndex]);
+
+		}
+	}
+
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 }
 
 void UItemSlot::PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent)
 {
 	SaveEdit();
-
 	Super::PostEditChangeChainProperty(PropertyChangedEvent);
-
-	// Check if the modified property is the ItemSlots array
-	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
-	if (PropertyName == GET_MEMBER_NAME_CHECKED(UItemSlot, acceptedActors))
-	{
-		// Check what specifically changed in the array
-		int32 ModifiedIndices = PropertyChangedEvent.GetNumObjectsBeingEdited();
-		// The array was modified, check which items were added, removed, or modified
-		for (int32 i = 0; i < ModifiedIndices; i++)
-		{
-			if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayAdd)
-			{
-				// An item was added to the array
-				auto AddedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
-				if (AddedObject)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Property was added"));
-				}
-			}
-			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayRemove)
-			{
-				// An item was removed from the array
-				auto RemovedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
-				if (RemovedObject)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Property was removed"));
-				}
-			}
-			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
-			{
-				// An item in the array was modified
-				auto ModifiedObject = PropertyChangedEvent.GetObjectBeingEdited(i);
-				if (ModifiedObject)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Property was edited"));
-				}
-			}
-		}
-	}
 }
 
 void UItemSlot::PostEditComponentMove(bool bFinished)
@@ -398,6 +433,39 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
 	DOREPLIFETIME(UItemSlot, previewMesh);
 	DOREPLIFETIME(UItemSlot, trigger);
+}
+
+void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor)
+{
+	FSlotableActorVisuals gfx;
+	auto obj = newActor.GetDefaultObject();
+	gfx.ID = newActor->GetName();
+	gfx.Mesh = obj->PreviewMesh;
+	gfx.Scale = obj->MeshScale;
+	gfx.RelativePosition = rootVisuals.RelativePosition;
+	gfx.RelativeRotation = rootVisuals.RelativeRotation;
+
+	if (!visualsArray.Contains(newActor))
+	{
+		visualsArray.Add(newActor, gfx);
+	}
+	else
+	{
+		visualsArray[newActor] = gfx;
+	}
+
+	E_ModifyAcceptedActorMesh(newActor);
+}
+
+void UItemSlot::removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor)
+{
+	if (visualsArray.Contains(removeActor))
+	{
+		if (currentlyDisplayedVisuals.ID == visualsArray[removeActor].ID)
+			E_ModifyRootComponent();
+
+		visualsArray.Remove(removeActor);
+	}
 }
 
 

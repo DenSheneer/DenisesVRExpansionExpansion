@@ -15,6 +15,33 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 	IDetailCategoryBuilder& itemSlotcategory = DetailLayout.EditCategory("Item Slot editing");
 	itemSlotcategory.SetSortOrder(0);
 
+	// Add your custom function to the General category
+	TSharedRef<SWidget> editRootButton = SNew(SButton)
+		.Text(FText::FromString("edit root"))
+		.ContentPadding(10.0f)
+		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+			{
+				// Get a pointer to the actor component instance
+				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
+				{
+					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+					if (ItemSlot != nullptr)
+					{
+						ItemSlot->E_ModifyRootComponent();
+					}
+				}
+
+				return FReply::Handled();
+			}));
+
+	itemSlotcategory.AddCustomRow(FText::FromString("Item Slot editing"))
+		.WholeRowContent()
+		[
+			editRootButton
+		];
+
 	IDetailGroup& AcceptedActorsGroup = itemSlotcategory.AddGroup(FName(TEXT("Editable meshes")), FText::FromString("Editable meshes"));
 
 	uint32 AcceptedActorsNr;
@@ -40,11 +67,43 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 				return FReply::Handled();
 			}));
 
+	TSharedRef<SButton> ResetTriggerToRootButton = SNew(SButton)
+		.Text(FText::FromString("reset to root"))
+		.ContentPadding(10.0f)
+		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
+			{
+				// Get a pointer to the actor component instance
+				TArray<TWeakObjectPtr<UObject>> SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+				for (int32 i = 0; i < SelectedObjects.Num(); ++i)
+				{
+					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
+					if (ItemSlot)
+					{
+						ItemSlot->E_ResetTriggerMeshToRootTransform();
+					}
+				}
+
+				return FReply::Handled();
+			}));
+
 	AcceptedActorsGroup.AddWidgetRow()
 		.NameContent()
-		[SNew(STextBlock).Text(FText::FromString("Trigger Shape"))]
+		[SNew(STextBlock).Text(FText::FromString("Trigger shape"))]
 	.ValueContent()
-		[editTriggerShapeButton];
+		[SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.Padding(2.0f)
+		[
+			editTriggerShapeButton
+		]
+	+ SHorizontalBox::Slot()
+		.Padding(2.0f)
+		.AutoWidth()
+		[
+			ResetTriggerToRootButton
+		]
+		];
 
 	arrayRef->GetNumElements(AcceptedActorsNr);
 
@@ -80,12 +139,33 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 
 									return FReply::Handled();
 								}));
+						TSharedRef<SButton> ResetPositionButton = SNew(SButton)
+							.Text(FText::FromString("reset to root"))
+							.ContentPadding(10.0f)
+							.OnClicked(FOnClicked::CreateLambda([selectedItemSlot, convertedToSlotableActorClass]() -> FReply
+								{
+									selectedItemSlot->E_ResetActorMeshToRootTransform(convertedToSlotableActorClass);
+
+									return FReply::Handled();
+								}));
 
 						AcceptedActorsGroup.AddWidgetRow()
 							.NameContent()
 							[SNew(STextBlock).Text(FText::FromString(ActorName))]
 						.ValueContent()
-							[ActorButton];
+							[SNew(SHorizontalBox)
+							+ SHorizontalBox::Slot()
+							.Padding(2.0f)
+							[
+								ActorButton
+							]
+						+ SHorizontalBox::Slot()
+							.Padding(2.0f)
+							.AutoWidth()
+							[
+								ResetPositionButton
+							]
+							];
 					}
 				}
 			}
@@ -96,7 +176,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 
 			// Add your custom function to the General category
 	TSharedRef<SWidget> visibilityButton = SNew(SButton)
-		.Text(FText::FromString("Toggle Visuals Visibility"))
+		.Text(FText::FromString("toggle visuals visibility"))
 		.ContentPadding(10.0f)
 		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
 			{
@@ -135,7 +215,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 
 				// Add your custom function to the General category
 	TSharedRef<SWidget> reloadButton = SNew(SButton)
-		.Text(FText::FromString("Reload Visuals"))
+		.Text(FText::FromString("(re)load visuals"))
 		.ContentPadding(10.0f)
 		.OnClicked(FOnClicked::CreateLambda([&]() -> FReply
 			{
