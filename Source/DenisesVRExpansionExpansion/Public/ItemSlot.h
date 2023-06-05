@@ -9,6 +9,7 @@
 #include "SlotableActorVisuals.h"
 #include "ItemSlotState.h"
 #include "DetailCategoryBuilder.h"
+#include "CollisionShape.h"
 #include "ItemSlotTrigger.h"
 #include "ItemSlot.generated.h"
 
@@ -29,16 +30,21 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
 		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> visualsArray;
 
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)	UStaticMesh* boxMesh;
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)	UStaticMesh* sphereMesh;
+
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)		FSlotableActorVisuals triggerVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals rootVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals currentlyDisplayedVisuals;
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals triggerVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	TSubclassOf<class ASlotableActor> currentlyDisplayedSlotableActor;
 
 	UPROPERTY(Replicated)	TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
 	UPROPERTY(Replicated)	AActor* reservedForActor;
 	UPROPERTY(Replicated)	USphereComponent* transformRoot;
 	UPROPERTY(Replicated)	UStaticMeshComponent* previewMesh;
-	UPROPERTY(Replicated)	UItemSlotTrigger* trigger;
+	//UPROPERTY(Replicated)	UItemSlotTrigger* trigger;
+
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly)	UShapeComponent* trigger;
 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
@@ -46,6 +52,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
 		UMaterial* rightHandMaterial;
+
 
 	void SaveEdit();
 	void SaveRootTransform();
@@ -65,6 +72,7 @@ public:
 	void E_SetVisibility(bool hidden);
 	void E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> visuals);
 	void E_ResetTriggerMeshToRootTransform();
+	void E_SetTriggerShape(ECollisionShape::Type shapeType);
 
 	// (R)untime functions
 	UFUNCTION(NetMulticast, Reliable) void R_SetPreviewVisuals(FSlotableActorVisuals visualProperties, EControllerHand handside);
@@ -90,6 +98,7 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
 		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) uint8 editorCollisionShape = 1;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -99,15 +108,14 @@ public:
 
 private:
 	UFUNCTION(Server, Reliable) void setVisualsOnReservation(ASlotableActor* actor, EControllerHand handSide);
-
-
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
 	void addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor);
 	void removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor);
 	void setupTriggerComponent();
 	void setupMeshShapeComponent();
 
+
 	UFUNCTION(NetMulticast, Reliable)
 		void server_Setup();
+
 };

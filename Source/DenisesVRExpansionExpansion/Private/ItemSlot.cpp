@@ -1,7 +1,9 @@
 #include "ItemSlot.h"
 #include "SlotableActor.h"
 #include "Components/SphereComponent.h"
+#include "Components/BoxComponent.h"
 #include <Editor.h>
+#include "UObject/ConstructorHelpers.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "ItemSlotTrigger.h"
 #include "Editor/UnrealEd/Public/Editor.h"
@@ -10,20 +12,21 @@
 
 UItemSlot::UItemSlot()
 {
+	this->SetCastShadow(false);
 	SetIsReplicatedByDefault(true);
 	PrimaryComponentTick.bCanEverTick = true;
+
 	triggerVisuals.ID = "trigger";
+	E_SetTriggerShape(ECollisionShape::Sphere);
 
 	rootVisuals.ID = "root";
-	FSoftObjectPath AssetRef(TEXT("/Engine/Content/ArtTools/RenderToTexture/Meshes/S_1_Unit_Sphere.uasset"));
-	rootVisuals.Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *AssetRef.ToString()));
+
+	E_ModifyRootComponent();
 }
 
 void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
-
-	//if (this->GetOwner()->HasAuthority())
 	server_Setup();
 }
 
@@ -114,11 +117,13 @@ void UItemSlot::E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor
 			SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
 
 			FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-			GEditor->RedrawLevelEditingViewports(true);
 
-			GEditor->SelectNone(false, true, false);
-			GEditor->SelectComponent(this, true, true, true);
-			GEditor->RedrawAllViewports(true);
+			if (GEditor)
+			{
+				GEditor->SelectNone(false, true, false);
+				GEditor->SelectComponent(this, true, true, true);
+				GEditor->RedrawAllViewports(true);
+			}
 		}
 
 		auto visualsToReset = visualsArray[visuals];
@@ -134,14 +139,33 @@ void UItemSlot::E_ResetTriggerMeshToRootTransform()
 		SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
 
 		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-		GEditor->RedrawLevelEditingViewports(true);
-
-		GEditor->SelectNone(false, true, false);
-		GEditor->SelectComponent(this, true, true, true);
-		GEditor->RedrawAllViewports(true);
+		if (GEditor)
+		{
+			GEditor->SelectNone(false, true, false);
+			GEditor->SelectComponent(this, true, true, true);
+			GEditor->RedrawAllViewports(true);
+		}
 	}
 	triggerVisuals.RelativePosition = rootVisuals.RelativePosition;
 	triggerVisuals.RelativeRotation = rootVisuals.RelativeRotation;
+}
+
+void UItemSlot::E_SetTriggerShape(ECollisionShape::Type shapeType)
+{
+	switch (shapeType)
+	{
+	case ECollisionShape::Sphere:
+		triggerVisuals.Mesh = sphereMesh;
+		editorCollisionShape = 1;
+		break;
+	case ECollisionShape::Box:
+		editorCollisionShape = 2;
+		triggerVisuals.Mesh = boxMesh;
+		break;
+	}
+
+	SetWorldScale3D(FVector(1.0f, 1.0f, 1.0f));
+	E_ModifyTriggerShape();
 }
 
 void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, EControllerHand handSide)
@@ -202,17 +226,51 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 
 void UItemSlot::setupTriggerComponent()
 {
-	trigger = NewObject<UItemSlotTrigger>(GetOwner(), FName(GetName() + "_triggerRoot"));
-	trigger->SetIsReplicated(true);
-	trigger->SetUp(this, triggerVisuals);
-	trigger->SetVisibility(false);
+	USphereComponent* triggerAsSphere;
+	UBoxComponent* triggerAsBox;
+
+	switch (editorCollisionShape)
+	{
+	case 1:
+		trigger = NewObject<USphereComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
+		triggerAsSphere = Cast<USphereComponent>(trigger);
+		triggerAsSphere->SetSphereRadius(50.0f);
+		break;
+	case 2:
+		trigger = NewObject<UBoxComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
+		triggerAsBox = Cast<UBoxComponent>(trigger);
+		triggerAsBox->SetBoxExtent(FVector(50.0f,50.0f,50.0f));
+		break;
+	default:
+		break;
+	}
+
+	if (trigger)
+	{
+		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, false);
+		AttachmentRules.ScaleRule = EAttachmentRule::KeepWorld;
+		trigger->AttachToComponent(this, AttachmentRules);
+		trigger->RegisterComponent();
+		GetOwner()->AddInstanceComponent(trigger);
+
+		trigger->bHiddenInGame = false;
+		trigger->SetUsingAbsoluteScale(true);
+		trigger->SetRelativeLocation(triggerVisuals.RelativePosition);
+		trigger->SetRelativeRotation(triggerVisuals.RelativeRotation);
+		trigger->SetRelativeScale3D(triggerVisuals.Scale);
+		trigger->SetIsReplicated(true);
+		trigger->SetVisibility(true);
+	}
+
+
 }
 
 void UItemSlot::setupMeshShapeComponent()
 {
-	previewMesh = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMesh"));
+	previewMesh = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMeshComponent"));
 	previewMesh->SetIsReplicated(true);
 	previewMesh->SetUsingAbsoluteScale(true);
+	previewMesh->SetCastShadow(false);
 
 	FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, false);
 	AttachmentRules.ScaleRule = EAttachmentRule::KeepWorld;
@@ -248,12 +306,12 @@ void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visu
 		currentlyDisplayedSlotableActor = visualsInAcceptedActors;
 		E_SetPreviewVisuals(visualsArray[currentlyDisplayedSlotableActor]);
 
-		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-		GEditor->RedrawLevelEditingViewports(true);
-
-		GEditor->SelectNone(false, true, false);
-		GEditor->SelectComponent(this, true, true, true);
-		GEditor->RedrawAllViewports(true);
+		if (IsSelectedInEditor())
+		{
+			GEditor->SelectNone(false, true, false);
+			GEditor->SelectComponent(this, true, true, true);
+			GEditor->RedrawAllViewports(true);
+		}
 	}
 	else
 		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visualsInAcceptedActors->GetName());
@@ -272,23 +330,27 @@ void UItemSlot::SaveEdit()
 
 void UItemSlot::SaveRootTransform()
 {
-	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-	GEditor->RedrawLevelEditingViewports(true);
+	if (GEditor)
+	{
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+	}
 
 	rootVisuals.RelativePosition = GetRelativeLocation();
 	rootVisuals.RelativeRotation = GetRelativeRotation();
 	rootVisuals.Scale = GetRelativeScale3D();
-
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("Saved root."));
 
 	UE_LOG(LogTemp, Log, TEXT("Saved root."));
 }
 
 void UItemSlot::SaveMeshTransform()
 {
-	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-	GEditor->RedrawLevelEditingViewports(true);
+	if (GEditor)
+	{
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+	}
+
 	if (visualsArray.Contains(currentlyDisplayedSlotableActor))
 	{
 		visualsArray[currentlyDisplayedSlotableActor].RelativePosition = GetRelativeLocation();
@@ -297,21 +359,25 @@ void UItemSlot::SaveMeshTransform()
 		UE_LOG(LogTemp, Log, TEXT("Saved slot mesh: '%s'"), *currentlyDisplayedSlotableActor->GetName());
 	}
 
-	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-	GEditor->RedrawLevelEditingViewports(true);
+	if (GEditor)
+	{
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+	}
 }
 
 void UItemSlot::SaveTriggerTransform()
 {
-	FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
-	GEditor->RedrawLevelEditingViewports(true);
+	if (GEditor)
+	{
+		FEditorDelegates::LoadSelectedAssetsIfNeeded.Broadcast();
+		GEditor->RedrawLevelEditingViewports(true);
+	}
 
 	triggerVisuals.RelativePosition = GetRelativeLocation();
 	triggerVisuals.RelativeRotation = GetRelativeRotation();
 	triggerVisuals.Scale = GetRelativeScale3D();
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("Saved trigger mesh."));
 
 	UE_LOG(LogTemp, Log, TEXT("Saved trigger mesh."));
 }
@@ -347,9 +413,12 @@ void UItemSlot::E_ModifyRootComponent()
 	E_SetVisibility(true);
 	E_SetPreviewVisuals(rootVisuals);
 
-	GEditor->SelectNone(false, true, false);
-	GEditor->SelectComponent(this, true, true, true);
-	GEditor->RedrawAllViewports(true);
+	if (IsSelectedInEditor())
+	{
+		GEditor->SelectNone(false, true, false);
+		GEditor->SelectComponent(this, true, true, true);
+		GEditor->RedrawAllViewports(true);
+	}
 }
 
 void UItemSlot::E_ModifyTriggerShape()
@@ -360,14 +429,20 @@ void UItemSlot::E_ModifyTriggerShape()
 	E_SetVisibility(true);
 	E_SetPreviewVisuals(triggerVisuals);
 
-	GEditor->SelectNone(false, true, false);
-	GEditor->SelectComponent(this, true, true, true);
-	GEditor->RedrawAllViewports(true);
+	if (IsSelectedInEditor())
+	{
+		GEditor->SelectNone(false, true, false);
+		GEditor->SelectComponent(this, true, true, true);
+		GEditor->RedrawAllViewports(true);
+	}
 }
 
 void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	SaveEdit();
+	if (currentlyDisplayedVisuals.ID == rootVisuals.ID)
+		E_ModifyRootComponent();
+
 
 	// Check if the modified property is the ItemSlots array
 	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
@@ -453,8 +528,6 @@ void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor
 	{
 		visualsArray[newActor] = gfx;
 	}
-
-	E_ModifyAcceptedActorMesh(newActor);
 }
 
 void UItemSlot::removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor)

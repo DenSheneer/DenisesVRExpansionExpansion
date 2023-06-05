@@ -306,8 +306,6 @@ void ASlotableActor::subscribeToSlotAvailableEvent(UItemSlot* slot)
 			this->addSlotToList(pSlot);
 		}
 	));
-
-	UE_LOG(LogTemp, Warning, TEXT("%s Should be subbed"), *this->GetName());
 }
 void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 {
@@ -317,7 +315,6 @@ void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 	auto handle = AvailableEventHandles[slot];
 	if (!handle.IsValid()) { return; }
 
-	UE_LOG(LogTemp, Warning, TEXT("%s Should be unsubbed"), *this->GetName());
 	slot->OnAvailableEvent.Remove(handle);
 	AvailableEventHandles.Remove(slot);
 }
