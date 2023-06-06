@@ -30,6 +30,8 @@ public:
 		FVector MeshScale;
 
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	USphereComponent* ColliderComponent;
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
 		TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
@@ -50,8 +52,6 @@ protected:
 	UFUNCTION(Server, Reliable) void Server_GripRelease(UGripMotionControllerComponent* ReleasingController);
 	UFUNCTION(Server, Reliable) void Server_Grip(UGripMotionControllerComponent* GrippingController);
 
-	UFUNCTION(Blueprintcallable) void ComponentOverlapBegin(UActorComponent* other);
-	UFUNCTION(Blueprintcallable) void ComponentOverlapEnd(UActorComponent* other);
 
 private:
 	FColor debugColor;
@@ -61,12 +61,14 @@ private:
 	UFUNCTION(Server, Reliable) void refreshNearestSlot();
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
-	void handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefresh = false);
+	UFUNCTION() void checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	UFUNCTION() void checkForSlotOnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
 	void removeSlotFromList(UItemSlot* slotToRemove);
 	void addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh = false);
 	void reset_GrippingParameters();
 	UItemSlot* findNearestSlot(TArray<UItemSlot*> slotsToCheck);
-	USphereComponent* triggerComponent;
+
 
 	//	availability events
 	FDelegateHandle OccupiedEventHandle;

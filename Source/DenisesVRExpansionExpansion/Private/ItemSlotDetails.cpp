@@ -49,18 +49,18 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 
 	arrayRef->GetNumElements(AcceptedActorsNr);
 
-	//if (AcceptedActorsNr == 0)
-	//{
-	//	AcceptedActorsGroup.AddWidgetRow()
-	//		.WholeRowContent()
-	//		[
-	//			SNew(STextBlock)
-	//			.TextStyle(FCoreStyle::Get(), "EmbossedText")
-	//		.Font(FSlateFontInfo(FPaths::EngineContentDir() / TEXT("Slate/Fonts/Roboto-Regular.ttf"), 9))
-	//		.Text(FText::FromString("No accepted actors"))
-	//		.ColorAndOpacity(FSlateColor(FLinearColor::Red))
-	//		];
-	//}
+	if (AcceptedActorsNr == 0)
+	{
+		AcceptedActorsGroup.AddWidgetRow()
+			.WholeRowContent()
+			[
+				SNew(STextBlock)
+				.TextStyle(FCoreStyle::Get(), "EmbossedText")
+			.Font(FSlateFontInfo(FPaths::EngineContentDir() / TEXT("Slate/Fonts/Roboto-Regular.ttf"), 9))
+			.Text(FText::FromString("No accepted actors"))
+			.ColorAndOpacity(FSlateColor(FLinearColor::Red))
+			];
+	}
 
 	for (uint32 i = 0; i < AcceptedActorsNr; i++)
 	{

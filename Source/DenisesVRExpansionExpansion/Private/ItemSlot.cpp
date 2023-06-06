@@ -37,7 +37,6 @@ void UItemSlot::server_Setup_Implementation()
 	setupMeshShapeComponent();
 	setupTriggerComponent();
 
-
 	this->SetVisibility(false);
 }
 
@@ -155,16 +154,16 @@ void UItemSlot::E_SetTriggerShape(ECollisionShape::Type shapeType)
 	switch (shapeType)
 	{
 	case ECollisionShape::Sphere:
-		triggerVisuals.Mesh = sphereMesh;
 		editorCollisionShape = 1;
+		triggerVisuals.Mesh = sphereMesh;
+		triggerVisuals.Scale = FVector(1.0f, 1.0f, 1.0f);
 		break;
 	case ECollisionShape::Box:
 		editorCollisionShape = 2;
 		triggerVisuals.Mesh = boxMesh;
+		triggerVisuals.Scale = FVector(1.0f, 1.0f, 1.0f);
 		break;
 	}
-
-	SetWorldScale3D(FVector(1.0f, 1.0f, 1.0f));
 	E_ModifyTriggerShape();
 }
 
@@ -249,7 +248,7 @@ void UItemSlot::setupTriggerComponent()
 	{
 		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, false);
 		AttachmentRules.ScaleRule = EAttachmentRule::KeepWorld;
-		trigger->AttachToComponent(this, AttachmentRules);
+		trigger->AttachToComponent(GetAttachmentRoot(), AttachmentRules);
 		trigger->RegisterComponent();
 		GetOwner()->AddInstanceComponent(trigger);
 
@@ -260,6 +259,8 @@ void UItemSlot::setupTriggerComponent()
 		trigger->SetRelativeScale3D(triggerVisuals.Scale);
 		trigger->SetIsReplicated(true);
 		trigger->SetVisibility(true);
+
+		trigger->AttachToComponent(this, AttachmentRules);
 	}
 
 

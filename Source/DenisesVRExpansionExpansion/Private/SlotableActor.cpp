@@ -14,12 +14,12 @@ void ASlotableActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (GetNetMode() == ENetMode::NM_Client)
-		debugColor = FColor::Red;
-	else
-		debugColor = FColor::Green;
-
 	setupColliderRef();
+	if (ColliderComponent)
+	{
+		ColliderComponent->OnComponentBeginOverlap.AddDynamic(this, &ASlotableActor::checkForSlotOnOverlapBegin);
+		ColliderComponent->OnComponentEndOverlap.AddDynamic(this, &ASlotableActor::checkForSlotOnOverlapEnd);
+	}
 }
 void ASlotableActor::Tick(float deltaSeconds)
 {
@@ -93,7 +93,7 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 {
 	currentlyAvailable_Slots.Empty();
 	TArray<UPrimitiveComponent*> overlappingComponents;
-	triggerComponent->GetOverlappingComponents(overlappingComponents);
+	ColliderComponent->GetOverlappingComponents(overlappingComponents);
 
 	int nrOfOverlaps = overlappingComponents.Num();
 	if (nrOfOverlaps > 0)
@@ -106,7 +106,7 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 				UItemSlot* slot = castTo->AttachedTo();
 				if (slot)
 				{
-					handleSlotOverlap(slot, true);
+					//checkForSlotOnOverlapBegin(slot, true);
 				}
 			}
 		}
@@ -170,31 +170,10 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 		}
 	return nullptr;
 }
-void ASlotableActor::ComponentOverlapBegin(UActorComponent* other)
-{
-	UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(other);
-	if (!castTo) { return; }
-
-	UItemSlot* slot = castTo->AttachedTo();
-	if (!slot) { return; }
-
-	handleSlotOverlap(slot);
-}
-
-void ASlotableActor::ComponentOverlapEnd(UActorComponent* other)
-{
-	UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(other);
-
-	if (!castTo) { return; }
-	UItemSlot* slot = castTo->AttachedTo();
-
-	if (!slot) { return; }
-	removeSlotFromList(slot);
-}
 
 void ASlotableActor::setupColliderRef()
 {
-	triggerComponent = FindComponentByClass<USphereComponent>();
+	ColliderComponent = FindComponentByClass<USphereComponent>();
 }
 
 void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -208,18 +187,33 @@ void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ASlotableActor, currentNearestSlot);
 }
 
-void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefreshFlag)
+void ASlotableActor::checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	UItemSlot* overlappingSlot;
+	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
+
 	if (overlappingSlot != nullptr)
 	{
 		if (currentGripState == EItemGripState::gripped)
 		{
 			if (overlappingSlot->CheckForCompatibility(this))
 				if (overlappingSlot->SlotState() == EItemSlotState::available)
-					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
+					addSlotToList(overlappingSlot, false);
 				else
 					subscribeToSlotAvailableEvent(overlappingSlot);
 		}
+	}
+}
+
+void ASlotableActor::checkForSlotOnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	UItemSlot* overlappingSlot;
+	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
+
+	if (overlappingSlot != nullptr)
+	{
+		if (overlappingSlot->CheckForCompatibility(this))
+			removeSlotFromList(overlappingSlot);
 	}
 }
 
