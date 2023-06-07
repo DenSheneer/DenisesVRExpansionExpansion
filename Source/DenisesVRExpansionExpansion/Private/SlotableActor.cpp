@@ -32,6 +32,12 @@ void ASlotableActor::Tick(float deltaSeconds)
 	}
 }
 
+void ASlotableActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+	Super::EndPlay(EndPlayReason);
+}
+
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
 	Super::OnGrip_Implementation(GrippingController, GripInformation);
@@ -100,20 +106,21 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 	{
 		for (int i = 0; i < nrOfOverlaps; i++)
 		{
-			UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(overlappingComponents[i]);
-			if (castTo)
+			UItemSlot* slot = Cast<UItemSlot>(overlappingComponents[i]->GetAttachParent());
+			if (slot)
 			{
-				UItemSlot* slot = castTo->AttachedTo();
-				if (slot)
+				if (currentGripState == EItemGripState::gripped)
 				{
-					//checkForSlotOnOverlapBegin(slot, true);
+					if (slot->CheckForCompatibility(this))
+						if (slot->SlotState() == EItemSlotState::available)
+							addSlotToList(slot, true);
+						else
+							subscribeToSlotAvailableEvent(slot);
 				}
 			}
 		}
 		if (HasAuthority())
 			refreshNearestSlot();
-		else
-			GEngine->AddOnScreenDebugMessage(-1, 1.5f, debugColor, TEXT("Did not run, no authority"));
 	}
 }
 void ASlotableActor::refreshNearestSlot_Implementation()

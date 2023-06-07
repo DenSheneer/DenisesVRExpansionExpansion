@@ -7,7 +7,6 @@
 #include "Components/SphereComponent.h"
 #include "Grippables/GrippableActor.h"
 #include "ItemGripState.h"
-#include "ItemSlotTrigger.h"
 #include "GripMotionControllerComponent.h"
 #include "ItemSlot.h"
 #include "SlotableActor.generated.h"
@@ -45,6 +44,7 @@ protected:
 
 	virtual void BeginPlay() override;
 	virtual void Tick(float deltaSeconds) override;
+	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed = false) override;
 	virtual void OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation) override;
