@@ -41,12 +41,11 @@ void ASlotableActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
 	Super::OnGrip_Implementation(GrippingController, GripInformation);
-	auto owner = GrippingController->GetOwner();
-	if (!owner) { return; }
-	this->SetOwner(owner);
+	auto controllerOwner = GrippingController->GetOwner();
+	if (!controllerOwner) { return; }
+	SetOwner(controllerOwner);
 
 	if (!HasAuthority()) { return; }
-	UE_LOG(LogTemp, Warning, TEXT("Owner: %s"), *GetOwner()->GetName());
 	Server_Grip(GrippingController);
 }
 
@@ -125,11 +124,6 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 }
 void ASlotableActor::refreshNearestSlot_Implementation()
 {
-	if (GetLocalRole() == ROLE_Authority)
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("refreshNearestSlot"));
-	else
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("refreshNearestSlot"));
-
 	UItemSlot* newNearest = findNearestSlot(currentlyAvailable_Slots);
 	if (newNearest != currentNearestSlot)
 	{
@@ -237,6 +231,7 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 			unsubscribeFromAvailableEvent(slotToRemove);
 		}
 
+		if (!HasAuthority()) { return; }
 		if (slotToRemove == currentNearestSlot)
 			refreshNearestSlot();
 	}

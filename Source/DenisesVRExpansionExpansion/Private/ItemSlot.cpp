@@ -26,39 +26,40 @@ UItemSlot::UItemSlot()
 void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
-	server_Setup();
+
+	if (GetOwner()->HasAuthority())
+		server_Setup();
 }
 
 void UItemSlot::server_Setup_Implementation()
 {
-	E_SetPreviewVisuals(triggerVisuals);
-
 	setupMeshShapeComponent();
 	setupTriggerComponent();
-
 	this->SetVisibility(false);
 }
 
 void UItemSlot::R_SetPreviewVisuals_Implementation(const FSlotableActorVisuals visualProperties, const EControllerHand handSide)
 {
-	if (previewMesh)
+	if (visualsComponent)
 	{
 		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(visualProperties.RelativePosition);
 		auto newRotation = GetAttachmentRoot()->GetComponentTransform().TransformRotation(FQuat(visualProperties.RelativeRotation));
-		previewMesh->SetWorldLocation(newPosition);
-		previewMesh->SetWorldRotation(newRotation);
-		previewMesh->SetWorldScale3D(visualProperties.Scale);
-		previewMesh->SetStaticMesh(visualProperties.Mesh);
+		visualsComponent->SetWorldLocation(newPosition);
+		visualsComponent->SetWorldRotation(newRotation);
+		visualsComponent->SetWorldScale3D(visualProperties.Scale);
+		visualsComponent->SetStaticMesh(visualProperties.Mesh);
 
 		switch (handSide)
 		{
 		case EControllerHand::Left:
-			previewMesh->SetMaterial(0, leftHandMaterial);
+			visualsComponent->SetMaterial(0, leftHandMaterial);
 			break;
 		case EControllerHand::Right:
-			previewMesh->SetMaterial(0, rightHandMaterial);
+			visualsComponent->SetMaterial(0, rightHandMaterial);
 			break;
 		}
+
+		visualsComponent->SetVisibility(true);
 	}
 }
 
@@ -71,6 +72,8 @@ bool UItemSlot::CheckForCompatibility(const ASlotableActor* actor)
 	}
 	return false;
 }
+
+
 
 void UItemSlot::E_TogglePreviewVisibility()
 {
@@ -88,6 +91,11 @@ void UItemSlot::E_TogglePreviewVisibility()
 void UItemSlot::E_SetPreviewVisuals(const FSlotableActorVisuals visualProperties)
 {
 	currentlyDisplayedVisuals = visualProperties;
+
+	if (visualProperties.ID.Equals(triggerVisuals.ID) || visualProperties.ID.Equals(rootVisuals.ID))
+		SetMaterial(0, editorColliderMaterial);
+	else
+		SetMaterial(0, nullptr);
 
 	SetStaticMesh(visualProperties.Mesh);
 	SetWorldScale3D(visualProperties.Scale);
@@ -159,11 +167,6 @@ void UItemSlot::E_SetTriggerShape(const ECollisionShape::Type shapeType)
 
 void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, const EControllerHand handSide)
 {
-	if (GetOwner()->GetLocalRole() == ROLE_Authority)
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("ReserveForActor"));
-	else
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("ReserveForActor"));
-
 	if (currentState == EItemSlotState::available)
 	{
 		int index = acceptedActors.IndexOfByKey(actor->GetClass());
@@ -182,7 +185,6 @@ void UItemSlot::setVisualsOnReservation_Implementation(const ASlotableActor* act
 		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
 		R_SetPreviewVisuals(currentlyDisplayedVisuals, handSide);
 	}
-	previewMesh->SetVisibility(true);
 }
 
 void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
@@ -191,16 +193,17 @@ void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
 
 	if (actor == reservedForActor)
 	{
-		//reservedForActor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-		//reservedForActor->SetOwner(GetOwner());
 		reservedForActor->DisableComponentsSimulatePhysics();
-		FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
-		AttachmentRules.ScaleRule = EAttachmentRule::KeepRelative;
-		reservedForActor->AttachToComponent(previewMesh, AttachmentRules);
-		previewMesh->SetVisibility(false);
+		reservedForActor->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+
+		actor->SetActorRelativeLocation(visualsComponent->GetRelativeLocation());
+		actor->SetActorRelativeRotation(visualsComponent->GetRelativeRotation());
+
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
+
+		visualsComponent->SetVisibility(false);
 	}
 	else
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
@@ -221,49 +224,53 @@ void UItemSlot::setupTriggerComponent()
 	switch (editorCollisionShape)
 	{
 	case 1:
-		trigger = NewObject<USphereComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
-		triggerAsSphere = Cast<USphereComponent>(trigger);
+		colliderComponent = NewObject<USphereComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
+		triggerAsSphere = Cast<USphereComponent>(colliderComponent);
 		triggerAsSphere->SetSphereRadius(50.0f);
 		break;
 	case 2:
-		trigger = NewObject<UBoxComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
-		triggerAsBox = Cast<UBoxComponent>(trigger);
+		colliderComponent = NewObject<UBoxComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
+		triggerAsBox = Cast<UBoxComponent>(colliderComponent);
 		triggerAsBox->SetBoxExtent(FVector(50.0f, 50.0f, 50.0f));
 		break;
 	default:
 		break;
 	}
 
-	if (trigger)
+	if (colliderComponent)
 	{
-		trigger->SetupAttachment(this);
-		trigger->RegisterComponent();
-		GetOwner()->AddInstanceComponent(trigger);
+		colliderComponent->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		colliderComponent->RegisterComponent();
+		GetOwner()->AddInstanceComponent(colliderComponent);
 
 		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(triggerVisuals.RelativePosition);
 		auto newRotation = GetAttachmentRoot()->GetComponentTransform().TransformRotation(FQuat(triggerVisuals.RelativeRotation));
-		trigger->SetWorldLocation(newPosition);
-		trigger->SetWorldRotation(newRotation);
+		colliderComponent->SetWorldLocation(newPosition);
+		colliderComponent->SetWorldRotation(newRotation);
 
-		trigger->bHiddenInGame = false;
-		trigger->SetUsingAbsoluteScale(true);
-		trigger->SetRelativeScale3D(triggerVisuals.Scale);
-		trigger->SetIsReplicated(true);
-		trigger->SetVisibility(true);
+		colliderComponent->SetCollisionProfileName("Trigger");
+		colliderComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Overlap);
+		colliderComponent->bHiddenInGame = false;
+		colliderComponent->SetUsingAbsoluteScale(true);
+		colliderComponent->SetWorldScale3D(triggerVisuals.Scale);
+		colliderComponent->SetIsReplicated(true);
+		colliderComponent->SetVisibility(true);
 	}
 }
 
 void UItemSlot::setupMeshShapeComponent()
 {
-	previewMesh = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMeshComponent"));
-	previewMesh->SetupAttachment(this);
-	previewMesh->RegisterComponent();
-	GetOwner()->AddInstanceComponent(previewMesh);
+	visualsComponent = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMeshComponent"));
+	visualsComponent->SetupAttachment(this);
+	visualsComponent->RegisterComponent();
+	GetOwner()->AddInstanceComponent(visualsComponent);
 
-	previewMesh->SetIsReplicated(true);
-	previewMesh->SetUsingAbsoluteScale(true);
-	previewMesh->SetCastShadow(false);
-	previewMesh->SetVisibility(false);
+	visualsComponent->SetIsReplicated(true);
+	visualsComponent->SetCollisionProfileName("NoCollision");
+	visualsComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Ignore);
+	visualsComponent->SetUsingAbsoluteScale(true);
+	visualsComponent->SetCastShadow(false);
+	visualsComponent->SetVisibility(false);
 }
 
 void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
@@ -272,8 +279,9 @@ void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
 	{
 		currentState = EItemSlotState::available;
 		reservedForActor = nullptr;
-		previewMesh->SetVisibility(false);
 		OnAvailableEvent.Broadcast(this);
+
+		visualsComponent->SetVisibility(false);
 	}
 }
 
@@ -322,7 +330,7 @@ void UItemSlot::SaveRootTransform()
 
 	rootVisuals.RelativePosition = GetRelativeLocation();
 	rootVisuals.RelativeRotation = GetRelativeRotation();
-	rootVisuals.Scale = GetRelativeScale3D();
+	rootVisuals.Scale = GetComponentScale();
 
 	UE_LOG(LogTemp, Log, TEXT("Saved root."));
 }
@@ -339,7 +347,7 @@ void UItemSlot::SaveMeshTransform()
 	{
 		visualsArray[currentlyDisplayedSlotableActor].RelativePosition = GetRelativeLocation();
 		visualsArray[currentlyDisplayedSlotableActor].RelativeRotation = GetRelativeRotation();
-		visualsArray[currentlyDisplayedSlotableActor].Scale = GetRelativeScale3D();
+		visualsArray[currentlyDisplayedSlotableActor].Scale = GetComponentScale();
 		UE_LOG(LogTemp, Log, TEXT("Saved slot mesh: '%s'"), *currentlyDisplayedSlotableActor->GetName());
 	}
 
@@ -360,7 +368,7 @@ void UItemSlot::SaveTriggerTransform()
 
 	triggerVisuals.RelativePosition = GetRelativeLocation();
 	triggerVisuals.RelativeRotation = GetRelativeRotation();
-	triggerVisuals.Scale = GetRelativeScale3D();
+	triggerVisuals.Scale = GetComponentScale();
 
 
 	UE_LOG(LogTemp, Log, TEXT("Saved trigger mesh."));
@@ -488,8 +496,8 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(UItemSlot, currentState);
 	DOREPLIFETIME(UItemSlot, reservedForActor);
 	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
-	DOREPLIFETIME(UItemSlot, previewMesh);
-	DOREPLIFETIME(UItemSlot, trigger);
+	DOREPLIFETIME(UItemSlot, visualsComponent);
+	DOREPLIFETIME(UItemSlot, colliderComponent);
 }
 
 void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor)

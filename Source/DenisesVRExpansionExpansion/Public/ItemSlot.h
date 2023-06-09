@@ -40,8 +40,8 @@ protected:
 	UPROPERTY(Replicated)	TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
 	UPROPERTY(Replicated)	AActor* reservedForActor;
 	UPROPERTY(Replicated)	USphereComponent* transformRoot;
-	UPROPERTY(Replicated)	UStaticMeshComponent* previewMesh;
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly)	UShapeComponent* trigger;
+	UPROPERTY(Replicated)	UStaticMeshComponent* visualsComponent;
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly)	UShapeComponent* colliderComponent;
 
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
@@ -49,6 +49,9 @@ protected:
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
 		UMaterial* rightHandMaterial;
+
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
+		UMaterial* editorColliderMaterial;
 
 	void SaveEdit();
 	void SaveRootTransform();
@@ -111,7 +114,7 @@ private:
 	void setupMeshShapeComponent();
 
 
-	UFUNCTION(NetMulticast, Reliable)
+	UFUNCTION(Server, Reliable)
 		void server_Setup();
 
 };
