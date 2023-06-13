@@ -189,12 +189,10 @@ void UItemSlot::setVisualsOnReservation_Implementation(const ASlotableActor* act
 
 void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
 {
-	GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, TEXT("Receive"));
-
 	if (actor == reservedForActor)
 	{
-		reservedForActor->DisableComponentsSimulatePhysics();
-		reservedForActor->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		actor->DisableComponentsSimulatePhysics();
+		actor->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 
 		actor->SetActorRelativeLocation(visualsComponent->GetRelativeLocation());
 		actor->SetActorRelativeRotation(visualsComponent->GetRelativeRotation());
@@ -463,7 +461,6 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 			if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ArrayRemove)
 			{
 				removeActorFromVisualsArray(ModifiedActor);
-				UE_LOG(LogTemp, Warning, TEXT("array index removed"));
 			}
 			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
 				addActorToVisualArray(acceptedActors[ModifiedIndex]);
