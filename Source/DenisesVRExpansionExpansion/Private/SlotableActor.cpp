@@ -14,12 +14,12 @@ void ASlotableActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (GetNetMode() == ENetMode::NM_Client)
-		debugColor = FColor::Red;
-	else
-		debugColor = FColor::Green;
-
 	setupColliderRef();
+	if (ColliderComponent)
+	{
+		ColliderComponent->OnComponentBeginOverlap.AddDynamic(this, &ASlotableActor::checkForSlotOnOverlapBegin);
+		ColliderComponent->OnComponentEndOverlap.AddDynamic(this, &ASlotableActor::checkForSlotOnOverlapEnd);
+	}
 }
 void ASlotableActor::Tick(float deltaSeconds)
 {
@@ -32,15 +32,20 @@ void ASlotableActor::Tick(float deltaSeconds)
 	}
 }
 
+void ASlotableActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+	Super::EndPlay(EndPlayReason);
+}
+
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
 	Super::OnGrip_Implementation(GrippingController, GripInformation);
-	auto owner = GrippingController->GetOwner();
-	if (!owner) { return; }
-	this->SetOwner(owner);
+	auto controllerOwner = GrippingController->GetOwner();
+	if (!controllerOwner) { return; }
+	SetOwner(controllerOwner);
 
 	if (!HasAuthority()) { return; }
-	UE_LOG(LogTemp, Warning, TEXT("Owner: %s"), *GetOwner()->GetName());
 	Server_Grip(GrippingController);
 }
 
@@ -93,36 +98,32 @@ void ASlotableActor::manualFindAvailableSlotsCall()
 {
 	currentlyAvailable_Slots.Empty();
 	TArray<UPrimitiveComponent*> overlappingComponents;
-	triggerComponent->GetOverlappingComponents(overlappingComponents);
+	ColliderComponent->GetOverlappingComponents(overlappingComponents);
 
 	int nrOfOverlaps = overlappingComponents.Num();
 	if (nrOfOverlaps > 0)
 	{
 		for (int i = 0; i < nrOfOverlaps; i++)
 		{
-			UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(overlappingComponents[i]);
-			if (castTo)
+			UItemSlot* slot = Cast<UItemSlot>(overlappingComponents[i]->GetAttachParent());
+			if (slot)
 			{
-				UItemSlot* slot = castTo->AttachedTo();
-				if (slot)
+				if (currentGripState == EItemGripState::gripped)
 				{
-					handleSlotOverlap(slot, true);
+					if (slot->CheckForCompatibility(this))
+						if (slot->SlotState() == EItemSlotState::available)
+							addSlotToList(slot, true);
+						else
+							subscribeToSlotAvailableEvent(slot);
 				}
 			}
 		}
 		if (HasAuthority())
 			refreshNearestSlot();
-		else
-			GEngine->AddOnScreenDebugMessage(-1, 1.5f, debugColor, TEXT("Did not run, no authority"));
 	}
 }
 void ASlotableActor::refreshNearestSlot_Implementation()
 {
-	if (GetLocalRole() == ROLE_Authority)
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Green, TEXT("refreshNearestSlot"));
-	else
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, TEXT("refreshNearestSlot"));
-
 	UItemSlot* newNearest = findNearestSlot(currentlyAvailable_Slots);
 	if (newNearest != currentNearestSlot)
 	{
@@ -170,31 +171,10 @@ UItemSlot* ASlotableActor::findNearestSlot(TArray<UItemSlot*> slotsToCheck)
 		}
 	return nullptr;
 }
-void ASlotableActor::ComponentOverlapBegin(UActorComponent* other)
-{
-	UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(other);
-	if (!castTo) { return; }
-
-	UItemSlot* slot = castTo->AttachedTo();
-	if (!slot) { return; }
-
-	handleSlotOverlap(slot);
-}
-
-void ASlotableActor::ComponentOverlapEnd(UActorComponent* other)
-{
-	UItemSlotTrigger* castTo = Cast<UItemSlotTrigger>(other);
-
-	if (!castTo) { return; }
-	UItemSlot* slot = castTo->AttachedTo();
-
-	if (!slot) { return; }
-	removeSlotFromList(slot);
-}
 
 void ASlotableActor::setupColliderRef()
 {
-	triggerComponent = FindComponentByClass<USphereComponent>();
+	ColliderComponent = FindComponentByClass<USphereComponent>();
 }
 
 void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -208,18 +188,33 @@ void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(ASlotableActor, currentNearestSlot);
 }
 
-void ASlotableActor::handleSlotOverlap(UItemSlot* overlappingSlot, bool skipNearestRefreshFlag)
+void ASlotableActor::checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	UItemSlot* overlappingSlot;
+	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
+
 	if (overlappingSlot != nullptr)
 	{
 		if (currentGripState == EItemGripState::gripped)
 		{
 			if (overlappingSlot->CheckForCompatibility(this))
 				if (overlappingSlot->SlotState() == EItemSlotState::available)
-					addSlotToList(overlappingSlot, skipNearestRefreshFlag);
+					addSlotToList(overlappingSlot, false);
 				else
 					subscribeToSlotAvailableEvent(overlappingSlot);
 		}
+	}
+}
+
+void ASlotableActor::checkForSlotOnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	UItemSlot* overlappingSlot;
+	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
+
+	if (overlappingSlot != nullptr)
+	{
+		if (overlappingSlot->CheckForCompatibility(this))
+			removeSlotFromList(overlappingSlot);
 	}
 }
 
@@ -236,6 +231,7 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 			unsubscribeFromAvailableEvent(slotToRemove);
 		}
 
+		if (!HasAuthority()) { return; }
 		if (slotToRemove == currentNearestSlot)
 			refreshNearestSlot();
 	}
@@ -306,8 +302,6 @@ void ASlotableActor::subscribeToSlotAvailableEvent(UItemSlot* slot)
 			this->addSlotToList(pSlot);
 		}
 	));
-
-	UE_LOG(LogTemp, Warning, TEXT("%s Should be subbed"), *this->GetName());
 }
 void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 {
@@ -317,7 +311,6 @@ void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 	auto handle = AvailableEventHandles[slot];
 	if (!handle.IsValid()) { return; }
 
-	UE_LOG(LogTemp, Warning, TEXT("%s Should be unsubbed"), *this->GetName());
 	slot->OnAvailableEvent.Remove(handle);
 	AvailableEventHandles.Remove(slot);
 }

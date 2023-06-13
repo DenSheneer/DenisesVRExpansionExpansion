@@ -9,7 +9,6 @@ void UItemSlotTrigger::SetUp(UItemSlot* pAttachedTo, FSlotableActorVisuals visua
 	attachedTo = pAttachedTo;
 
 	SetStaticMesh(visuals.Mesh);
-	SetMaterial(0, visuals.PreviewMaterial);
 	SetWorldScale3D(visuals.Scale);
 
 	AttachToComponent(pAttachedTo->GetAttachParent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);

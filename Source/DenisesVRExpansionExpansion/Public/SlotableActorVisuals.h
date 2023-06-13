@@ -18,10 +18,6 @@ public:
 		TObjectPtr<UStaticMesh> Mesh;
 
 	/** Please add a variable description */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "PreviewMaterial", MakeStructureDefaultValue = "None"))
-		TObjectPtr<UMaterial> PreviewMaterial;
-
-	/** Please add a variable description */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (DisplayName = "Scale", MakeStructureDefaultValue = "1.000000,1.000000,1.000000"))
 		FVector Scale = FVector(1,1,1);
 
