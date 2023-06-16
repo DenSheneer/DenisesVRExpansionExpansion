@@ -193,6 +193,9 @@ void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
 	{
 		actor->DisableComponentsSimulatePhysics();
 		actor->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		auto colComp = actor->GetRootComponent();
+		auto castToMesh = Cast<UStaticMeshComponent>(colComp);
+		castToMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 
 		actor->SetActorRelativeLocation(visualsComponent->GetRelativeLocation());
 		actor->SetActorRelativeRotation(visualsComponent->GetRelativeRotation());
@@ -214,7 +217,7 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 	OnAvailableEvent.Broadcast(this);
 }
 
-void UItemSlot::setupTriggerComponent()
+void UItemSlot::setupTriggerComponent_Implementation()
 {
 	USphereComponent* triggerAsSphere;
 	UBoxComponent* triggerAsBox;
@@ -237,6 +240,9 @@ void UItemSlot::setupTriggerComponent()
 
 	if (colliderComponent)
 	{
+		colliderComponent->AlwaysLoadOnClient = true;
+		colliderComponent = colliderComponent;
+
 		colliderComponent->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 		colliderComponent->RegisterComponent();
 		GetOwner()->AddInstanceComponent(colliderComponent);
@@ -246,28 +252,33 @@ void UItemSlot::setupTriggerComponent()
 		colliderComponent->SetWorldLocation(newPosition);
 		colliderComponent->SetWorldRotation(newRotation);
 
-		colliderComponent->SetCollisionProfileName("Trigger");
-		colliderComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Overlap);
+		colliderComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		colliderComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Ignore);
+
 		colliderComponent->bHiddenInGame = false;
 		colliderComponent->SetUsingAbsoluteScale(true);
 		colliderComponent->SetWorldScale3D(triggerVisuals.Scale);
 		colliderComponent->SetIsReplicated(true);
-		colliderComponent->SetVisibility(true);
+		colliderComponent->SetVisibility(false);
 	}
 }
 
-void UItemSlot::setupMeshShapeComponent()
+void UItemSlot::setupMeshShapeComponent_Implementation()
 {
 	visualsComponent = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMeshComponent"));
-	visualsComponent->SetupAttachment(this);
+
+	visualsComponent->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	visualsComponent->RegisterComponent();
 	GetOwner()->AddInstanceComponent(visualsComponent);
 
-	visualsComponent->SetIsReplicated(true);
-	visualsComponent->SetCollisionProfileName("NoCollision");
-	visualsComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Ignore);
+	visualsComponent->AlwaysLoadOnClient = true;
+	visualsComponent->SetGenerateOverlapEvents(false);
+	visualsComponent->SetSimulatePhysics(false);
+	visualsComponent->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
+
 	visualsComponent->SetUsingAbsoluteScale(true);
 	visualsComponent->SetCastShadow(false);
+	visualsComponent->SetIsReplicated(true);
 	visualsComponent->SetVisibility(false);
 }
 

@@ -29,14 +29,11 @@ public:
 		FVector MeshScale;
 
 protected:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	USphereComponent* ColliderComponent;
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-		TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-		UGripMotionControllerComponent* currentGrippingController = nullptr;
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-	EControllerHand handSide = EControllerHand::AnyHand;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)							UPrimitiveComponent* rootAsPrimitiveComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")				USphereComponent* ColliderComponent;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")	TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")	UGripMotionControllerComponent* currentGrippingController = nullptr;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")	EControllerHand handSide = EControllerHand::AnyHand;
 
 	UPROPERTY(Replicated) UItemSlot* current_ResidingSlot = nullptr;
 	UPROPERTY(Replicated) UItemSlot* currentNearestSlot = nullptr;
@@ -54,7 +51,6 @@ protected:
 
 
 private:
-	FColor debugColor;
 	void setupColliderRef();
 	void manualFindAvailableSlotsCall();
 

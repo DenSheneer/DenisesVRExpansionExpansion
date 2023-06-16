@@ -59,6 +59,11 @@ void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent
 
 void ASlotableActor::Server_Grip_Implementation(UGripMotionControllerComponent* GrippingController)
 {
+	rootAsPrimitiveComponent = Cast<UPrimitiveComponent>(GetRootComponent());
+	rootAsPrimitiveComponent->SetSimulatePhysics(false);
+	rootAsPrimitiveComponent->SetCollisionProfileName("Trigger");
+	rootAsPrimitiveComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Overlap);
+
 	currentGrippingController = GrippingController;
 
 	if (currentGrippingController->MotionSource == "left")
@@ -89,7 +94,14 @@ void ASlotableActor::Server_GripRelease_Implementation(UGripMotionControllerComp
 		current_ResidingSlot = currentNearestSlot;
 	}
 	else
+	{
 		currentGripState = EItemGripState::loose;
+		rootAsPrimitiveComponent = Cast<UPrimitiveComponent>(GetRootComponent());
+		rootAsPrimitiveComponent->SetSimulatePhysics(true);
+		rootAsPrimitiveComponent->SetCollisionProfileName("BlockAllDynamic");
+		rootAsPrimitiveComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Overlap);
+	}
+
 
 	reset_GrippingParameters();
 }
@@ -190,6 +202,8 @@ void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 void ASlotableActor::checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	//E_LOG(LogTemp, Warning, TEXT("%s"), *OtherComp->GetName());
+
 	UItemSlot* overlappingSlot;
 	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
 

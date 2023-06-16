@@ -37,11 +37,11 @@ protected:
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals currentlyDisplayedVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	TSubclassOf<class ASlotableActor> currentlyDisplayedSlotableActor;
 
-	UPROPERTY(Replicated)	TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
-	UPROPERTY(Replicated)	AActor* reservedForActor;
-	UPROPERTY(Replicated)	USphereComponent* transformRoot;
-	UPROPERTY(Replicated)	UStaticMeshComponent* visualsComponent;
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly)	UShapeComponent* colliderComponent;
+	UPROPERTY(Replicated)										TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
+	UPROPERTY(Replicated)										AActor* reservedForActor;
+	UPROPERTY(Replicated)										USphereComponent* transformRoot;
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	UStaticMeshComponent* visualsComponent;
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	UShapeComponent* colliderComponent;
 
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
@@ -74,23 +74,17 @@ public:
 	void E_SetTriggerShape(const ECollisionShape::Type shapeType);
 
 	// (R)untime functions
-	UFUNCTION(NetMulticast, Reliable) void R_SetPreviewVisuals(const FSlotableActorVisuals visualProperties, const EControllerHand handside);
-
-	bool CheckForCompatibility(const ASlotableActor* actor);
-
-	UFUNCTION(Server, Reliable) void ReserveForActor(ASlotableActor* actor, const EControllerHand handSide);
-
+	UFUNCTION(NetMulticast, Reliable)	void R_SetPreviewVisuals(const FSlotableActorVisuals visualProperties, const EControllerHand handside);
+	UFUNCTION(Server, Reliable)			void ReserveForActor(ASlotableActor* actor, const EControllerHand handSide);
 	UFUNCTION(NetMulticast, Reliable)	void ReceiveActor(ASlotableActor* actor);
+	bool CheckForCompatibility(const ASlotableActor* actor);
 
 	void RemoveSlotableActor(ASlotableActor* actor);
 	const EItemSlotState SlotState() { return currentState; }
 	void ActorOutOfRangeEvent(ASlotableActor* actor);
 
-	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)
-		FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
-
-	DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)
-		FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
+	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)	FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
+	DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)	FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
 
 	FSlotOccupiedEvent OnOccupiedEvent;
 	FSlotAvailableEvent OnAvailableEvent;
@@ -110,8 +104,8 @@ private:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	void addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor);
 	void removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor);
-	void setupTriggerComponent();
-	void setupMeshShapeComponent();
+	UFUNCTION(NetMulticast, Reliable)	void setupTriggerComponent();
+	UFUNCTION(NetMulticast, Reliable)	void setupMeshShapeComponent();
 
 
 	UFUNCTION(Server, Reliable)
