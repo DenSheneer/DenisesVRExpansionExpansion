@@ -40,8 +40,8 @@ protected:
 	UPROPERTY(Replicated)										TEnumAsByte<EItemSlotState> currentState = EItemSlotState::available;
 	UPROPERTY(Replicated)										AActor* reservedForActor;
 	UPROPERTY(Replicated)										USphereComponent* transformRoot;
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	UStaticMeshComponent* visualsComponent;
-	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	UShapeComponent* colliderComponent;
+	UPROPERTY()	UStaticMeshComponent* visualsComponent;
+	UPROPERTY()	UShapeComponent* colliderComponent;
 
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
@@ -74,14 +74,21 @@ public:
 	void E_SetTriggerShape(const ECollisionShape::Type shapeType);
 
 	// (R)untime functions
-	UFUNCTION(NetMulticast, Reliable)	void R_SetPreviewVisuals(const FSlotableActorVisuals visualProperties, const EControllerHand handside);
-	UFUNCTION(Server, Reliable)			void ReserveForActor(ASlotableActor* actor, const EControllerHand handSide);
-	UFUNCTION(NetMulticast, Reliable)	void ReceiveActor(ASlotableActor* actor);
+	UFUNCTION(Server, Reliable)	void ReserveForActorInstigation(ASlotableActor* actor, const EControllerHand handSide);
+	UFUNCTION(NetMulticast, Reliable) void ReserveForActorMulti(ASlotableActor* actor, const EControllerHand handSide);
+	UFUNCTION(Client, Reliable) void ReserveForActor(const FSlotableActorVisuals visualProperties, const EControllerHand handSide);
+
+	UFUNCTION(Server, Reliable)	void ReceiveActorInstigator(ASlotableActor* actor);
+	UFUNCTION(NetMulticast, Reliable)	void ReceiveActorMulti();
+	UFUNCTION(Client, Reliable)	void ReceiveActor();
 	bool CheckForCompatibility(const ASlotableActor* actor);
 
 	void RemoveSlotableActor(ASlotableActor* actor);
 	const EItemSlotState SlotState() { return currentState; }
-	void ActorOutOfRangeEvent(ASlotableActor* actor);
+
+	UFUNCTION(Server, Reliable)			void ActorOutOfRangeEventInstigation(ASlotableActor* actor);
+	UFUNCTION(NetMulticast, Reliable)	void ActorOutOfRangeEventMulti(ASlotableActor* actor);
+	UFUNCTION(Client, Reliable)			void ActorOutOfRangeEvent(ASlotableActor* actor);
 
 	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)	FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
 	DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)	FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
@@ -100,15 +107,14 @@ public:
 #endif
 
 private:
-	UFUNCTION(Server, Reliable) void setVisualsOnReservation(const ASlotableActor* actor, const EControllerHand handSide);
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	void addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor);
 	void removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor);
-	UFUNCTION(NetMulticast, Reliable)	void setupTriggerComponent();
-	UFUNCTION(NetMulticast, Reliable)	void setupMeshShapeComponent();
 
-
+	UFUNCTION(NetMulticast, Reliable)	void server_Setup();
 	UFUNCTION(Server, Reliable)
-		void server_Setup();
+		void setupTriggerComponent();
+	UFUNCTION(Client, Reliable)
+		void setupVisualsComponent();
 
 };

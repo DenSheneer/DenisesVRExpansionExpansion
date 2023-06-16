@@ -27,40 +27,14 @@ void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (GetOwner()->HasAuthority())
-		server_Setup();
+	server_Setup();
 }
 
 void UItemSlot::server_Setup_Implementation()
 {
-	setupMeshShapeComponent();
+	setupVisualsComponent();
 	setupTriggerComponent();
 	this->SetVisibility(false);
-}
-
-void UItemSlot::R_SetPreviewVisuals_Implementation(const FSlotableActorVisuals visualProperties, const EControllerHand handSide)
-{
-	if (visualsComponent)
-	{
-		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(visualProperties.RelativePosition);
-		auto newRotation = GetAttachmentRoot()->GetComponentTransform().TransformRotation(FQuat(visualProperties.RelativeRotation));
-		visualsComponent->SetWorldLocation(newPosition);
-		visualsComponent->SetWorldRotation(newRotation);
-		visualsComponent->SetWorldScale3D(visualProperties.Scale);
-		visualsComponent->SetStaticMesh(visualProperties.Mesh);
-
-		switch (handSide)
-		{
-		case EControllerHand::Left:
-			visualsComponent->SetMaterial(0, leftHandMaterial);
-			break;
-		case EControllerHand::Right:
-			visualsComponent->SetMaterial(0, rightHandMaterial);
-			break;
-		}
-
-		visualsComponent->SetVisibility(true);
-	}
 }
 
 bool UItemSlot::CheckForCompatibility(const ASlotableActor* actor)
@@ -165,29 +139,54 @@ void UItemSlot::E_SetTriggerShape(const ECollisionShape::Type shapeType)
 	E_ModifyTriggerShape();
 }
 
-void UItemSlot::ReserveForActor_Implementation(ASlotableActor* actor, const EControllerHand handSide)
+void UItemSlot::ReserveForActorInstigation_Implementation(ASlotableActor* actor, const EControllerHand handSide)
 {
 	if (currentState == EItemSlotState::available)
 	{
 		int index = acceptedActors.IndexOfByKey(actor->GetClass());
 		if (index != INDEX_NONE)
 		{
-			setVisualsOnReservation(actor, handSide);
+			ReserveForActorMulti(actor, handSide);
 		}
 		reservedForActor = actor;
 		currentState = EItemSlotState::reserved;
 	}
 }
-void UItemSlot::setVisualsOnReservation_Implementation(const ASlotableActor* actor, const EControllerHand handSide)
+void UItemSlot::ReserveForActorMulti_Implementation(ASlotableActor* actor, const EControllerHand handSide)
 {
 	if (visualsArray.Contains(actor->GetClass()))
 	{
 		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
-		R_SetPreviewVisuals(currentlyDisplayedVisuals, handSide);
+		ReserveForActor(currentlyDisplayedVisuals, handSide);
 	}
 }
 
-void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
+void UItemSlot::ReserveForActor_Implementation(const FSlotableActorVisuals visualProperties, const EControllerHand handSide)
+{
+	if (visualsComponent)
+	{
+		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(visualProperties.RelativePosition);
+		auto newRotation = GetAttachmentRoot()->GetComponentTransform().TransformRotation(FQuat(visualProperties.RelativeRotation));
+		visualsComponent->SetWorldLocation(newPosition);
+		visualsComponent->SetWorldRotation(newRotation);
+		visualsComponent->SetWorldScale3D(visualProperties.Scale);
+		visualsComponent->SetStaticMesh(visualProperties.Mesh);
+
+		switch (handSide)
+		{
+		case EControllerHand::Left:
+			visualsComponent->SetMaterial(0, leftHandMaterial);
+			break;
+		case EControllerHand::Right:
+			visualsComponent->SetMaterial(0, rightHandMaterial);
+			break;
+		}
+
+		visualsComponent->SetVisibility(true);
+	}
+}
+
+void UItemSlot::ReceiveActorInstigator_Implementation(ASlotableActor* actor)
 {
 	if (actor == reservedForActor)
 	{
@@ -204,10 +203,18 @@ void UItemSlot::ReceiveActor_Implementation(ASlotableActor* actor)
 		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
 
-		visualsComponent->SetVisibility(false);
+		ReceiveActorMulti();
 	}
 	else
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
+}
+void UItemSlot::ReceiveActorMulti_Implementation()
+{
+	ReceiveActor();
+}
+void UItemSlot::ReceiveActor_Implementation()
+{
+	visualsComponent->SetVisibility(false);
 }
 
 void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
@@ -219,13 +226,19 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 
 void UItemSlot::setupTriggerComponent_Implementation()
 {
+	AActor* Owner = GetOwner();
 	USphereComponent* triggerAsSphere;
 	UBoxComponent* triggerAsBox;
 
 	switch (editorCollisionShape)
 	{
 	case 1:
-		colliderComponent = NewObject<USphereComponent>(GetOwner(), FName(GetName() + "_triggerComponent"));
+		colliderComponent = Cast<UShapeComponent>(Owner->AddComponentByClass(
+			USphereComponent::StaticClass(),
+			true,
+			FTransform::Identity,
+			false));
+		colliderComponent->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetIncludingScale);
 		triggerAsSphere = Cast<USphereComponent>(colliderComponent);
 		triggerAsSphere->SetSphereRadius(50.0f);
 		break;
@@ -240,11 +253,6 @@ void UItemSlot::setupTriggerComponent_Implementation()
 
 	if (colliderComponent)
 	{
-		colliderComponent->AlwaysLoadOnClient = true;
-		colliderComponent = colliderComponent;
-
-		colliderComponent->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-		colliderComponent->RegisterComponent();
 		GetOwner()->AddInstanceComponent(colliderComponent);
 
 		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(triggerVisuals.RelativePosition);
@@ -252,37 +260,48 @@ void UItemSlot::setupTriggerComponent_Implementation()
 		colliderComponent->SetWorldLocation(newPosition);
 		colliderComponent->SetWorldRotation(newRotation);
 
-		colliderComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		colliderComponent->SetCollisionProfileName("Trigger", true);
 		colliderComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Ignore);
 
 		colliderComponent->bHiddenInGame = false;
 		colliderComponent->SetUsingAbsoluteScale(true);
 		colliderComponent->SetWorldScale3D(triggerVisuals.Scale);
-		colliderComponent->SetIsReplicated(true);
+		//colliderComponent->SetIsReplicated(true);
 		colliderComponent->SetVisibility(false);
 	}
 }
 
-void UItemSlot::setupMeshShapeComponent_Implementation()
+void UItemSlot::setupVisualsComponent_Implementation()
 {
-	visualsComponent = NewObject<UStaticMeshComponent>(GetOwner(), FName(GetName() + "_previewMeshComponent"));
+	AActor* Owner = GetOwner();
+	visualsComponent = Cast<UStaticMeshComponent>(Owner->AddComponentByClass(
+		UStaticMeshComponent::StaticClass(),
+		true,
+		FTransform::Identity,
+		false));
 
 	visualsComponent->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-	visualsComponent->RegisterComponent();
 	GetOwner()->AddInstanceComponent(visualsComponent);
 
-	visualsComponent->AlwaysLoadOnClient = true;
 	visualsComponent->SetGenerateOverlapEvents(false);
 	visualsComponent->SetSimulatePhysics(false);
 	visualsComponent->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
 
 	visualsComponent->SetUsingAbsoluteScale(true);
 	visualsComponent->SetCastShadow(false);
-	visualsComponent->SetIsReplicated(true);
+	//visualsComponent->SetIsReplicated(true);
 	visualsComponent->SetVisibility(false);
 }
 
-void UItemSlot::ActorOutOfRangeEvent(ASlotableActor* actor)
+void UItemSlot::ActorOutOfRangeEventInstigation_Implementation(ASlotableActor* actor)
+{
+	ActorOutOfRangeEventMulti(actor);
+}
+void UItemSlot::ActorOutOfRangeEventMulti_Implementation(ASlotableActor* actor)
+{
+	ActorOutOfRangeEvent(actor);
+}
+void UItemSlot::ActorOutOfRangeEvent_Implementation(ASlotableActor* actor)
 {
 	if (actor == reservedForActor)
 	{
@@ -504,8 +523,8 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(UItemSlot, currentState);
 	DOREPLIFETIME(UItemSlot, reservedForActor);
 	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
-	DOREPLIFETIME(UItemSlot, visualsComponent);
-	DOREPLIFETIME(UItemSlot, colliderComponent);
+	//DOREPLIFETIME(UItemSlot, visualsComponent);
+	//DOREPLIFETIME(UItemSlot, colliderComponent);
 }
 
 void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor)

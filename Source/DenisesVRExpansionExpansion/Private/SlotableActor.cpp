@@ -89,7 +89,7 @@ void ASlotableActor::Server_GripRelease_Implementation(UGripMotionControllerComp
 		unsubscribeFromOccupiedEvent(currentNearestSlot);
 		currentGripState = EItemGripState::slotted;
 
-		currentNearestSlot->ReceiveActor(this);
+		currentNearestSlot->ReceiveActorInstigator(this);
 
 		current_ResidingSlot = currentNearestSlot;
 	}
@@ -144,13 +144,13 @@ void ASlotableActor::refreshNearestSlot_Implementation()
 			unsubscribeFromOccupiedEvent(currentNearestSlot);
 			unsubscribeFromAvailableEvent(currentNearestSlot);
 
-			currentNearestSlot->ActorOutOfRangeEvent(this);
+			currentNearestSlot->ActorOutOfRangeEventInstigation(this);
 		}
 
 		if (newNearest != nullptr)
 		{
 			if (HasAuthority())
-				newNearest->ReserveForActor(this, handSide);
+				newNearest->ReserveForActorInstigation(this, handSide);
 		}
 		currentNearestSlot = newNearest;
 	}
