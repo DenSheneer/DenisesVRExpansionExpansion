@@ -42,9 +42,11 @@ bool UItemSlot::CheckForCompatibility(const ASlotableActor* actor)
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
 	if (index != INDEX_NONE)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Compatibility check succeeded"));
 		return true;
 	}
-	return false;
+	UE_LOG(LogTemp, Warning, TEXT("Compatibility check succeeded"))
+		return false;
 }
 
 
@@ -150,10 +152,14 @@ void UItemSlot::ReserveForActorInstigation_Implementation(ASlotableActor* actor,
 		}
 		reservedForActor = actor;
 		currentState = EItemSlotState::reserved;
+		UE_LOG(LogTemp, Warning, TEXT("Reservation done"))
 	}
+	else
+		UE_LOG(LogTemp, Warning, TEXT("Reservation failed"));
 }
 void UItemSlot::ReserveForActorMulti_Implementation(ASlotableActor* actor, const EControllerHand handSide)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Reservation multi"));
 	if (visualsArray.Contains(actor->GetClass()))
 	{
 		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
@@ -163,6 +169,7 @@ void UItemSlot::ReserveForActorMulti_Implementation(ASlotableActor* actor, const
 
 void UItemSlot::ReserveForActor_Implementation(const FSlotableActorVisuals visualProperties, const EControllerHand handSide)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Reservation client"));
 	if (visualsComponent)
 	{
 		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(visualProperties.RelativePosition);
@@ -184,6 +191,8 @@ void UItemSlot::ReserveForActor_Implementation(const FSlotableActorVisuals visua
 
 		visualsComponent->SetVisibility(true);
 	}
+	else
+		UE_LOG(LogTemp, Warning, TEXT("Visuals component was NULL"));
 }
 
 void UItemSlot::ReceiveActorInstigator_Implementation(ASlotableActor* actor)
@@ -203,13 +212,26 @@ void UItemSlot::ReceiveActorInstigator_Implementation(ASlotableActor* actor)
 		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
 
-		ReceiveActorMulti();
+		ReceiveActorMulti(actor);
 	}
 	else
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
 }
-void UItemSlot::ReceiveActorMulti_Implementation()
+void UItemSlot::ReceiveActorMulti_Implementation(ASlotableActor* actor)
 {
+	actor->DisableComponentsSimulatePhysics();
+	actor->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	auto colComp = actor->GetRootComponent();
+	auto castToMesh = Cast<UStaticMeshComponent>(colComp);
+	castToMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+
+	actor->SetActorRelativeLocation(visualsComponent->GetRelativeLocation());
+	actor->SetActorRelativeRotation(visualsComponent->GetRelativeRotation());
+
+	reservedForActor = nullptr;
+	currentState = EItemSlotState::occupied;
+	OnOccupiedEvent.Broadcast(this);
+
 	ReceiveActor();
 }
 void UItemSlot::ReceiveActor_Implementation()
@@ -289,19 +311,15 @@ void UItemSlot::setupVisualsComponent_Implementation()
 
 	visualsComponent->SetUsingAbsoluteScale(true);
 	visualsComponent->SetCastShadow(false);
-	//visualsComponent->SetIsReplicated(true);
 	visualsComponent->SetVisibility(false);
 }
 
 void UItemSlot::ActorOutOfRangeEventInstigation_Implementation(ASlotableActor* actor)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Out of range is called"));
 	ActorOutOfRangeEventMulti(actor);
 }
 void UItemSlot::ActorOutOfRangeEventMulti_Implementation(ASlotableActor* actor)
-{
-	ActorOutOfRangeEvent(actor);
-}
-void UItemSlot::ActorOutOfRangeEvent_Implementation(ASlotableActor* actor)
 {
 	if (actor == reservedForActor)
 	{
@@ -309,8 +327,12 @@ void UItemSlot::ActorOutOfRangeEvent_Implementation(ASlotableActor* actor)
 		reservedForActor = nullptr;
 		OnAvailableEvent.Broadcast(this);
 
-		visualsComponent->SetVisibility(false);
+		ActorOutOfRangeEvent(actor);
 	}
+}
+void UItemSlot::ActorOutOfRangeEvent_Implementation(ASlotableActor* actor)
+{
+	visualsComponent->SetVisibility(false);
 }
 
 void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

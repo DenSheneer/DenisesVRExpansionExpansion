@@ -74,13 +74,14 @@ public:
 	void E_SetTriggerShape(const ECollisionShape::Type shapeType);
 
 	// (R)untime functions
-	UFUNCTION(Server, Reliable)	void ReserveForActorInstigation(ASlotableActor* actor, const EControllerHand handSide);
-	UFUNCTION(NetMulticast, Reliable) void ReserveForActorMulti(ASlotableActor* actor, const EControllerHand handSide);
-	UFUNCTION(Client, Reliable) void ReserveForActor(const FSlotableActorVisuals visualProperties, const EControllerHand handSide);
+	UFUNCTION(Server, Reliable)			void ReserveForActorInstigation(ASlotableActor* actor, const EControllerHand handSide);
+	UFUNCTION(NetMulticast, Reliable)	void ReserveForActorMulti(ASlotableActor* actor, const EControllerHand handSide);
+	UFUNCTION(Client, Reliable)			void ReserveForActor(const FSlotableActorVisuals visualProperties, const EControllerHand handSide);
 
-	UFUNCTION(Server, Reliable)	void ReceiveActorInstigator(ASlotableActor* actor);
-	UFUNCTION(NetMulticast, Reliable)	void ReceiveActorMulti();
-	UFUNCTION(Client, Reliable)	void ReceiveActor();
+	UFUNCTION(Server, Reliable)			void ReceiveActorInstigator(ASlotableActor* actor);
+	UFUNCTION(NetMulticast, Reliable)	void ReceiveActorMulti(ASlotableActor* actor);
+	UFUNCTION(Client, Reliable)			void ReceiveActor();
+
 	bool CheckForCompatibility(const ASlotableActor* actor);
 
 	void RemoveSlotableActor(ASlotableActor* actor);
