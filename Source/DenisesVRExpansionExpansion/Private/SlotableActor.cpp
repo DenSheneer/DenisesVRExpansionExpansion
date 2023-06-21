@@ -90,7 +90,8 @@ void ASlotableActor::Server_GripRelease_Implementation(UGripMotionControllerComp
 		unsubscribeFromOccupiedEvent(currentNearestSlot);
 		currentGripState = EItemGripState::slotted;
 
-		currentNearestSlot->ReceiveActorInstigator(this);
+		if (HasAuthority())
+			currentNearestSlot->ReceiveActorInstigator(this);
 
 		current_ResidingSlot = currentNearestSlot;
 	}
@@ -151,8 +152,7 @@ void ASlotableActor::refreshNearestSlot_Implementation()
 
 		if (newNearest != nullptr)
 		{
-			//if (HasAuthority())
-			newNearest->ReserveForActorInstigation(this, handSide);
+			newNearest->ReserveForActor_Server(this, handSide);
 		}
 		currentNearestSlot = newNearest;
 	}
@@ -204,7 +204,6 @@ void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 void ASlotableActor::checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	//E_LOG(LogTemp, Warning, TEXT("%s"), *OtherComp->GetName());
 	if (currentGripState != EItemGripState::gripped) { return; }
 
 	UItemSlot* overlappingSlot;

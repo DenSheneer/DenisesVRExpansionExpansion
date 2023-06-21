@@ -19,21 +19,22 @@ UItemSlot::UItemSlot()
 	E_SetTriggerShape(ECollisionShape::Sphere);
 
 	rootVisuals.ID = "root";
-
 	E_ModifyRootComponent();
 }
 
 void UItemSlot::BeginPlay()
 {
 	Super::BeginPlay();
-
-	server_Setup();
+	setupMulti();
 }
 
-void UItemSlot::server_Setup_Implementation()
+void UItemSlot::setupMulti_Implementation()
 {
 	setupVisualsComponent();
-	setupTriggerComponent();
+
+	if (GetOwner()->HasAuthority())
+		setupTriggerComponent();
+
 	this->SetVisibility(false);
 }
 
@@ -41,17 +42,14 @@ bool UItemSlot::CheckForCompatibility(const ASlotableActor* actor)
 {
 	int index = acceptedActors.IndexOfByKey(actor->GetClass());
 	if (index != INDEX_NONE)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Compatibility check succeeded"));
 		return true;
-	}
-	UE_LOG(LogTemp, Warning, TEXT("Compatibility check succeeded"))
+	else
 		return false;
 }
 
 
 
-void UItemSlot::E_TogglePreviewVisibility()
+void UItemSlot::E_ToggleVisibility()
 {
 	if (IsVisible())
 		E_SetVisibility(false);
@@ -64,28 +62,28 @@ void UItemSlot::E_TogglePreviewVisibility()
 /// Used to set this components visuals properties (mesh, material, world scale and relative transformation) according to the given FSlotableActor struct.
 /// </summary>
 /// <param name="visualProperties"></param>
-void UItemSlot::E_SetPreviewVisuals(const FSlotableActorVisuals visualProperties)
+void UItemSlot::E_SetPreviewVisuals(const FSlotableActorVisuals visuals)
 {
-	currentlyDisplayedVisuals = visualProperties;
+	currentlyDisplayedVisuals = visuals;
 
-	if (visualProperties.ID.Equals(triggerVisuals.ID) || visualProperties.ID.Equals(rootVisuals.ID))
+	if (visuals.ID.Equals(triggerVisuals.ID) || visuals.ID.Equals(rootVisuals.ID))
 		SetMaterial(0, editorColliderMaterial);
 	else
 		SetMaterial(0, nullptr);
 
-	SetStaticMesh(visualProperties.Mesh);
-	SetWorldScale3D(visualProperties.Scale);
-	SetRelativeLocation(visualProperties.RelativePosition);
-	SetRelativeRotation(visualProperties.RelativeRotation);
+	SetStaticMesh(visuals.Mesh);
+	SetWorldScale3D(visuals.Scale);
+	SetRelativeLocation(visuals.RelativePosition);
+	SetRelativeRotation(visuals.RelativeRotation);
 }
 
 void UItemSlot::E_SetVisibility(bool hidden) { this->SetVisibility(hidden); }
 
-void UItemSlot::E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> visuals)
+void UItemSlot::E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> actorToReset_Key)
 {
-	if (visualsArray.Contains(visuals))
+	if (actorVisuals_Map.Contains(actorToReset_Key))
 	{
-		if (currentlyDisplayedSlotableActor == visuals)
+		if (currentlyDisplayedSlotableActor == actorToReset_Key)
 		{
 			SetRelativeLocationAndRotation(rootVisuals.RelativePosition, rootVisuals.RelativeRotation);
 
@@ -99,7 +97,7 @@ void UItemSlot::E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor
 			}
 		}
 
-		auto visualsToReset = visualsArray[visuals];
+		auto visualsToReset = actorVisuals_Map[actorToReset_Key];
 		visualsToReset.RelativePosition = rootVisuals.RelativePosition;
 		visualsToReset.RelativeRotation = rootVisuals.RelativeRotation;
 	}
@@ -138,38 +136,33 @@ void UItemSlot::E_SetTriggerShape(const ECollisionShape::Type shapeType)
 		triggerVisuals.Scale = FVector(1.0f, 1.0f, 1.0f);
 		break;
 	}
-	E_ModifyTriggerShape();
+	E_ModifyTriggerComponent();
 }
 
-void UItemSlot::ReserveForActorInstigation_Implementation(ASlotableActor* actor, const EControllerHand handSide)
+void UItemSlot::ReserveForActor_Server_Implementation(ASlotableActor* actor, const EControllerHand handSide)
 {
 	if (currentState == EItemSlotState::available)
 	{
 		int index = acceptedActors.IndexOfByKey(actor->GetClass());
 		if (index != INDEX_NONE)
 		{
-			ReserveForActorMulti(actor, handSide);
+			SetClientVisualsOnReserve(actor, handSide);
 		}
 		reservedForActor = actor;
 		currentState = EItemSlotState::reserved;
-		UE_LOG(LogTemp, Warning, TEXT("Reservation done"))
 	}
-	else
-		UE_LOG(LogTemp, Warning, TEXT("Reservation failed"));
 }
-void UItemSlot::ReserveForActorMulti_Implementation(ASlotableActor* actor, const EControllerHand handSide)
+void UItemSlot::SetClientVisualsOnReserve_Implementation(ASlotableActor* actor, const EControllerHand handSide)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Reservation multi"));
-	if (visualsArray.Contains(actor->GetClass()))
+	if (actorVisuals_Map.Contains(actor->GetClass()))
 	{
-		currentlyDisplayedVisuals = *visualsArray.Find(actor->GetClass());
-		ReserveForActor(currentlyDisplayedVisuals, handSide);
+		currentlyDisplayedVisuals = *actorVisuals_Map.Find(actor->GetClass());
+		SetVisuals(currentlyDisplayedVisuals, handSide);
 	}
 }
 
-void UItemSlot::ReserveForActor_Implementation(const FSlotableActorVisuals visualProperties, const EControllerHand handSide)
+void UItemSlot::SetVisuals_Implementation(const FSlotableActorVisuals visualProperties, const EControllerHand handSide)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Reservation client"));
 	if (visualsComponent)
 	{
 		FVector newPosition = GetAttachmentRoot()->GetComponentTransform().TransformPosition(visualProperties.RelativePosition);
@@ -191,8 +184,6 @@ void UItemSlot::ReserveForActor_Implementation(const FSlotableActorVisuals visua
 
 		visualsComponent->SetVisibility(true);
 	}
-	else
-		UE_LOG(LogTemp, Warning, TEXT("Visuals component was NULL"));
 }
 
 void UItemSlot::ReceiveActorInstigator_Implementation(ASlotableActor* actor)
@@ -212,12 +203,14 @@ void UItemSlot::ReceiveActorInstigator_Implementation(ASlotableActor* actor)
 		currentState = EItemSlotState::occupied;
 		OnOccupiedEvent.Broadcast(this);
 
-		ReceiveActorMulti(actor);
+		SetVisualsOn_ActorReceive(actor);
+
+
 	}
 	else
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor(150, 150, 150), TEXT("received enter request from an actor that is not the ReservedFor Actor."));
 }
-void UItemSlot::ReceiveActorMulti_Implementation(ASlotableActor* actor)
+void UItemSlot::SetVisualsOn_ActorReceive_Implementation(ASlotableActor* actor)
 {
 	actor->DisableComponentsSimulatePhysics();
 	actor->AttachToComponent(this, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
@@ -316,7 +309,6 @@ void UItemSlot::setupVisualsComponent_Implementation()
 
 void UItemSlot::ActorOutOfRangeEventInstigation_Implementation(ASlotableActor* actor)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Out of range is called"));
 	ActorOutOfRangeEventMulti(actor);
 }
 void UItemSlot::ActorOutOfRangeEventMulti_Implementation(ASlotableActor* actor)
@@ -340,14 +332,14 @@ void UItemSlot::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompon
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
-void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visualsInAcceptedActors)
+void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> actorToModify_Key)
 {
 	SaveEdit();
 
-	if (visualsArray.Contains(visualsInAcceptedActors))
+	if (actorVisuals_Map.Contains(actorToModify_Key))
 	{
-		currentlyDisplayedSlotableActor = visualsInAcceptedActors;
-		E_SetPreviewVisuals(visualsArray[currentlyDisplayedSlotableActor]);
+		currentlyDisplayedSlotableActor = actorToModify_Key;
+		E_SetPreviewVisuals(actorVisuals_Map[currentlyDisplayedSlotableActor]);
 
 		if (IsSelectedInEditor())
 		{
@@ -357,7 +349,7 @@ void UItemSlot::E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visu
 		}
 	}
 	else
-		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *visualsInAcceptedActors->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("Visuals not found in visuals array: '%s'"), *actorToModify_Key->GetName());
 }
 
 void UItemSlot::SaveEdit()
@@ -393,11 +385,11 @@ void UItemSlot::SaveMeshTransform()
 		GEditor->RedrawLevelEditingViewports(true);
 	}
 
-	if (visualsArray.Contains(currentlyDisplayedSlotableActor))
+	if (actorVisuals_Map.Contains(currentlyDisplayedSlotableActor))
 	{
-		visualsArray[currentlyDisplayedSlotableActor].RelativePosition = GetRelativeLocation();
-		visualsArray[currentlyDisplayedSlotableActor].RelativeRotation = GetRelativeRotation();
-		visualsArray[currentlyDisplayedSlotableActor].Scale = GetComponentScale();
+		actorVisuals_Map[currentlyDisplayedSlotableActor].RelativePosition = GetRelativeLocation();
+		actorVisuals_Map[currentlyDisplayedSlotableActor].RelativeRotation = GetRelativeRotation();
+		actorVisuals_Map[currentlyDisplayedSlotableActor].Scale = GetComponentScale();
 		UE_LOG(LogTemp, Log, TEXT("Saved slot mesh: '%s'"), *currentlyDisplayedSlotableActor->GetName());
 	}
 
@@ -429,14 +421,14 @@ void UItemSlot::SaveTriggerTransform()
 void UItemSlot::E_ReloadVisuals()
 {
 	int acceptedActorsNr = acceptedActors.Num();
-	visualsArray.Empty();
+	actorVisuals_Map.Empty();
 	currentlyDisplayedSlotableActor = nullptr;
 
 	for (int i = 0; i < acceptedActorsNr; i++)
 	{
 		if (acceptedActors[i]->IsValidLowLevel())
 		{
-			addActorToVisualArray(acceptedActors[i]);
+			addActorToVisualsMap(acceptedActors[i]);
 		}
 		else
 			acceptedActors.RemoveAt(i);
@@ -461,7 +453,7 @@ void UItemSlot::E_ModifyRootComponent()
 	}
 }
 
-void UItemSlot::E_ModifyTriggerShape()
+void UItemSlot::E_ModifyTriggerComponent()
 {
 	SaveEdit();
 
@@ -492,7 +484,7 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 		if (!acceptedActors.IsValidIndex(ModifiedIndex))
 		{
 			TArray<TSubclassOf<ASlotableActor>> keys;
-			visualsArray.GetKeys(keys);
+			actorVisuals_Map.GetKeys(keys);
 
 			for (int i = 0; i < keys.Num(); i++)
 			{
@@ -501,8 +493,8 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 				if (currentlyDisplayedSlotableActor == keys[i])
 					E_ModifyRootComponent();
 
-				if (visualsArray.Contains(keys[i]))
-					visualsArray.Remove(keys[i]);
+				if (actorVisuals_Map.Contains(keys[i]))
+					actorVisuals_Map.Remove(keys[i]);
 			}
 		}
 		else
@@ -515,7 +507,7 @@ void UItemSlot::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEve
 				removeActorFromVisualsArray(ModifiedActor);
 			}
 			else if (PropertyChangedEvent.ChangeType == EPropertyChangeType::ValueSet)
-				addActorToVisualArray(acceptedActors[ModifiedIndex]);
+				addActorToVisualsMap(acceptedActors[ModifiedIndex]);
 
 		}
 	}
@@ -549,7 +541,7 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	//DOREPLIFETIME(UItemSlot, colliderComponent);
 }
 
-void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor)
+void UItemSlot::addActorToVisualsMap(TSubclassOf<class ASlotableActor> newActor)
 {
 	FSlotableActorVisuals gfx;
 	auto obj = newActor.GetDefaultObject();
@@ -559,20 +551,20 @@ void UItemSlot::addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor
 	gfx.RelativePosition = rootVisuals.RelativePosition;
 	gfx.RelativeRotation = rootVisuals.RelativeRotation;
 
-	if (!visualsArray.Contains(newActor))
-		visualsArray.Add(newActor, gfx);
+	if (!actorVisuals_Map.Contains(newActor))
+		actorVisuals_Map.Add(newActor, gfx);
 	else
-		visualsArray[newActor] = gfx;
+		actorVisuals_Map[newActor] = gfx;
 }
 
 void UItemSlot::removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor)
 {
-	if (visualsArray.Contains(removeActor))
+	if (actorVisuals_Map.Contains(removeActor))
 	{
-		if (currentlyDisplayedVisuals.ID.Equals(visualsArray[removeActor].ID))
+		if (currentlyDisplayedVisuals.ID.Equals(actorVisuals_Map[removeActor].ID))
 			E_ModifyRootComponent();
 
-		visualsArray.Remove(removeActor);
+		actorVisuals_Map.Remove(removeActor);
 	}
 }
 

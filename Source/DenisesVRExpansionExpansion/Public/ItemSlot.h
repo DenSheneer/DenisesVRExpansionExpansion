@@ -20,18 +20,19 @@ class UItemSlot : public UStaticMeshComponent
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UItemSlot();
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
-		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> visualsArray;
+		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> actorVisuals_Map;
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)	UStaticMesh* boxMesh;
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)	UStaticMesh* sphereMesh;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)					uint8 editorCollisionShape = 1;
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)		FSlotableActorVisuals triggerVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals rootVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals currentlyDisplayedVisuals;
@@ -43,7 +44,6 @@ protected:
 	UPROPERTY()	UStaticMeshComponent* visualsComponent;
 	UPROPERTY()	UShapeComponent* colliderComponent;
 
-
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
 		UMaterial* leftHandMaterial;
 
@@ -53,69 +53,151 @@ protected:
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
 		UMaterial* editorColliderMaterial;
 
-	void SaveEdit();
-	void SaveRootTransform();
-	void SaveMeshTransform();
-	void SaveTriggerTransform();
-
 public:
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+#pragma region Editor Functions
+	/**
+	* Editor-time function.
+	Toggles current visual's visibility.
+	*/
+	void E_ToggleVisibility();
 
-	//	(E)ditor functions
-	void E_TogglePreviewVisibility();
-	void E_ReloadVisuals();
-	void E_ModifyRootComponent();
-	void E_ModifyTriggerShape();
-	void E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> visuals);
-	void E_SetPreviewVisuals(const FSlotableActorVisuals visualProperties);
+	/**
+	* Editor-time function.
+	* Sets the currently edited visual's visibility.
+	*/
 	void E_SetVisibility(bool hidden);
-	void E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> visuals);
+
+	/**
+	* Editor-time function.
+	Iterates through acceptedActors array and loads default visuals from the acceptedActor's static class.
+	Saves values to actorVisuals_Map.
+	*/
+	void E_ReloadVisuals();
+
+	/**
+	* Editor-time function.
+	Switches current edit mode to target the Root Component.
+	*/
+	void E_ModifyRootComponent();
+
+	/**
+	* Editor-time function.
+	* Switches current edit mode to target the Trigger Component.
+	*/
+	void E_ModifyTriggerComponent();
+
+	/**
+	* Editor-time function.
+	* Switches current edit mode to target the provided ASlotableActor's visuals.
+	@param TSubclassOf<class ASlotableActor> actorToModify_Key: Key to access a FSlotableActorVisuals value in actorVisuals_Map.
+	*/
+	void E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> actorToModify_Key);
+
+	/**
+	* Editor-time function.
+	* Displays the provided FSlotableActorVisuals.
+	* NOTE: This is the EDITOR version of this method. For runtime, use the RUNTIME version of this method.
+	@param FSlotableActorVisuals visuals: Visuals to display. Sets mesh and transform.
+	*/
+	void E_SetPreviewVisuals(const FSlotableActorVisuals visuals);
+
+	/**
+	* Editor-time function.
+	* Resets provided ASlotableActor's transform to the root's transform.
+	@param TSubclassOf<class ASlotableActor> actorToReset_Key: Key to access a FSlotableActorVisuals value in actorVisuals_Map.
+	*/
+	void E_ResetActorMeshToRootTransform(TSubclassOf<class ASlotableActor> actorToReset_Key);
+
+	/**
+	* Editor-time function.
+	* Resets Trigger Component's transform to the root's transform.
+	@param TSubclassOf<class ASlotableActor> actorToReset_Key: Key to access a FSlotableActorVisuals value in actorVisuals_Map.
+	*/
 	void E_ResetTriggerMeshToRootTransform();
+
+	/**
+	* Editor-time function.
+	* Sets the trigger shape according to the provided ECollisionShape.
+	*/
 	void E_SetTriggerShape(const ECollisionShape::Type shapeType);
-
-	// (R)untime functions
-	UFUNCTION(Server, Reliable)			void ReserveForActorInstigation(ASlotableActor* actor, const EControllerHand handSide);
-	UFUNCTION(NetMulticast, Reliable)	void ReserveForActorMulti(ASlotableActor* actor, const EControllerHand handSide);
-	UFUNCTION(Client, Reliable)			void ReserveForActor(const FSlotableActorVisuals visualProperties, const EControllerHand handSide);
-
-	UFUNCTION(Server, Reliable)			void ReceiveActorInstigator(ASlotableActor* actor);
-	UFUNCTION(NetMulticast, Reliable)	void ReceiveActorMulti(ASlotableActor* actor);
-	UFUNCTION(Client, Reliable)			void ReceiveActor();
-
-	bool CheckForCompatibility(const ASlotableActor* actor);
-
-	void RemoveSlotableActor(ASlotableActor* actor);
-	const EItemSlotState SlotState() { return currentState; }
-
-	UFUNCTION(Server, Reliable)			void ActorOutOfRangeEventInstigation(ASlotableActor* actor);
-	UFUNCTION(NetMulticast, Reliable)	void ActorOutOfRangeEventMulti(ASlotableActor* actor);
-	UFUNCTION(Client, Reliable)			void ActorOutOfRangeEvent(ASlotableActor* actor);
-
-	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)	FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
-	DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)	FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
-
-	FSlotOccupiedEvent OnOccupiedEvent;
-	FSlotAvailableEvent OnAvailableEvent;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
-		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite) uint8 editorCollisionShape = 1;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
 	virtual void PostEditComponentMove(bool bFinished) override;
 #endif
+#pragma endregion
+
+#pragma region Runtime Functions
+
+	UFUNCTION(Server, Reliable)			void ReserveForActor_Server(ASlotableActor* actor, const EControllerHand handSide);
+	UFUNCTION(Server, Reliable)			void ReceiveActorInstigator(ASlotableActor* actor);
+
+
+	bool CheckForCompatibility(const ASlotableActor* actor);
+
+	void RemoveSlotableActor(ASlotableActor* actor);
+	const EItemSlotState SlotState() { return currentState; }
+
+
+	// Function that is called on the server when an actor exits this components's collision.
+	UFUNCTION(Server, Reliable)			void ActorOutOfRangeEventInstigation(ASlotableActor* actor);
+
+	//	Event an an ASlotableActor could subscribe to get notified when this slot became occupied.
+	DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)	FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
+	FSlotOccupiedEvent OnOccupiedEvent;
+
+	//	Event an an ASlotableActor could subscribe to get notified when this slot became available again.
+	DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)	FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
+	FSlotAvailableEvent OnAvailableEvent;
+
+	//	Array that hold static subclasses of ASlotableActor that this slot should accept.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
+		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
+
+#pragma endregion
 
 private:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	void addActorToVisualArray(TSubclassOf<class ASlotableActor> newActor);
+
+	//	Makes a new key entry in actorVisuals_Map
+	void addActorToVisualsMap(TSubclassOf<class ASlotableActor> newActor);
+
+	// Removes an entry from actorVisuals_Map.
 	void removeActorFromVisualsArray(TSubclassOf<class ASlotableActor> removeActor);
 
-	UFUNCTION(NetMulticast, Reliable)	void server_Setup();
+	/**
+	* Multicast method that sets up the required components.
+	*/
+	UFUNCTION(NetMulticast, Reliable)	void setupMulti();
+
+	/**
+	 * triggerComponent only exists on the server and so the setup should only run on it.
+	 * Collision detection happens on the server only.
+	 */
 	UFUNCTION(Server, Reliable)
 		void setupTriggerComponent();
+
+	/**
+	 * visualsComponent needs to be set up locally in order to work.
+	 * It is not replicated.
+	 */
 	UFUNCTION(Client, Reliable)
 		void setupVisualsComponent();
 
+	// Multicast function that is called by the server to notify clients.
+	UFUNCTION(NetMulticast, Reliable)	void ActorOutOfRangeEventMulti(ASlotableActor* actor);
+
+	// Client function that is called by a multicast event to handle local components when an actor exits this components's collision
+	UFUNCTION(Client, Reliable)			void ActorOutOfRangeEvent(ASlotableActor* actor);
+
+	UFUNCTION(NetMulticast, Reliable)	void SetClientVisualsOnReserve(ASlotableActor* actor, const EControllerHand handSide);
+	UFUNCTION(Client, Reliable)			void SetVisuals(const FSlotableActorVisuals visualProperties, const EControllerHand handSide);
+	UFUNCTION(NetMulticast, Reliable)	void SetVisualsOn_ActorReceive(ASlotableActor* actor);
+	UFUNCTION(Client, Reliable)			void ReceiveActor();
+
+	void SaveEdit();
+	void SaveRootTransform();
+	void SaveMeshTransform();
+	void SaveTriggerTransform();
 };
