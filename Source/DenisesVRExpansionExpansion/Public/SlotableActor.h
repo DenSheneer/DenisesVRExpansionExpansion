@@ -29,14 +29,11 @@ public:
 		FVector MeshScale;
 
 protected:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
-	USphereComponent* ColliderComponent;
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-		TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-		UGripMotionControllerComponent* currentGrippingController = nullptr;
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")
-	EControllerHand handSide = EControllerHand::AnyHand;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)							UPrimitiveComponent* rootAsPrimitiveComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")				USphereComponent* ColliderComponent;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")	TEnumAsByte<EItemGripState> currentGripState = EItemGripState::loose;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")	UGripMotionControllerComponent* currentGrippingController = nullptr;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Grip info")	EControllerHand handSide = EControllerHand::AnyHand;
 
 	UPROPERTY(Replicated) UItemSlot* current_ResidingSlot = nullptr;
 	UPROPERTY(Replicated) UItemSlot* currentNearestSlot = nullptr;
@@ -46,15 +43,14 @@ protected:
 	virtual void Tick(float deltaSeconds) override;
 	void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	virtual void OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed = false) override;
 	virtual void OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation) override;
+	UFUNCTION(NetMulticast, Reliable) void Server_Grip(UGripMotionControllerComponent* GrippingController);
 
-	UFUNCTION(Server, Reliable) void Server_GripRelease(UGripMotionControllerComponent* ReleasingController);
-	UFUNCTION(Server, Reliable) void Server_Grip(UGripMotionControllerComponent* GrippingController);
+	virtual void OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed = false) override;
+	UFUNCTION(NetMulticast, Reliable) void Server_GripRelease(UGripMotionControllerComponent* ReleasingController);
 
 
 private:
-	FColor debugColor;
 	void setupColliderRef();
 	void manualFindAvailableSlotsCall();
 
@@ -63,6 +59,7 @@ private:
 	
 	UFUNCTION() void checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 	UFUNCTION() void checkForSlotOnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+	UFUNCTION(Server, Reliable) void checkForSlotOnOverlapEndServer(UPrimitiveComponent* OtherComp);
 
 	void removeSlotFromList(UItemSlot* slotToRemove);
 	void addSlotToList(UItemSlot* slotToAdd, bool skipNearestRefresh = false);

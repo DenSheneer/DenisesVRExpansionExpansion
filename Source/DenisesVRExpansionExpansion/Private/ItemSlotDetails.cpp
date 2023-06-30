@@ -155,7 +155,7 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 					UItemSlot* ItemSlot = Cast<UItemSlot>(SelectedObjects[i]);
 					if (ItemSlot != nullptr)
 					{
-						ItemSlot->E_ModifyTriggerShape();
+						ItemSlot->E_ModifyTriggerComponent();
 					}
 				}
 

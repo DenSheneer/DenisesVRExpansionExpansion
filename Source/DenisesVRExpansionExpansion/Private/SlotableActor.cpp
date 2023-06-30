@@ -41,24 +41,18 @@ void ASlotableActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ASlotableActor::OnGrip_Implementation(UGripMotionControllerComponent* GrippingController, const FBPActorGripInformation& GripInformation)
 {
 	Super::OnGrip_Implementation(GrippingController, GripInformation);
-	auto controllerOwner = GrippingController->GetOwner();
-	if (!controllerOwner) { return; }
-	SetOwner(controllerOwner);
 
 	if (!HasAuthority()) { return; }
 	Server_Grip(GrippingController);
 }
 
-void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed)
-{
-	if (HasAuthority())
-		Server_GripRelease(ReleasingController);
-
-	Super::OnGripRelease_Implementation(ReleasingController, GripInformation, bWasSocketed);
-}
-
 void ASlotableActor::Server_Grip_Implementation(UGripMotionControllerComponent* GrippingController)
 {
+	rootAsPrimitiveComponent = Cast<UPrimitiveComponent>(GetRootComponent());
+	rootAsPrimitiveComponent->SetSimulatePhysics(false);
+	rootAsPrimitiveComponent->SetCollisionProfileName("Trigger");
+	rootAsPrimitiveComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Overlap);
+
 	currentGrippingController = GrippingController;
 
 	if (currentGrippingController->MotionSource == "left")
@@ -70,10 +64,22 @@ void ASlotableActor::Server_Grip_Implementation(UGripMotionControllerComponent* 
 	{
 		current_ResidingSlot->RemoveSlotableActor(this);
 		current_ResidingSlot = nullptr;
-		SetOwner(GrippingController->GetOwner());
 	}
+
+	auto controllerOwner = GrippingController->GetOwner();
+	if (!controllerOwner) { return; }
+	SetOwner(controllerOwner);
+
 	currentGripState = EItemGripState::gripped;
 	manualFindAvailableSlotsCall();
+}
+
+void ASlotableActor::OnGripRelease_Implementation(UGripMotionControllerComponent* ReleasingController, const FBPActorGripInformation& GripInformation, bool bWasSocketed)
+{
+	if (HasAuthority())
+		Server_GripRelease(ReleasingController);
+
+	Super::OnGripRelease_Implementation(ReleasingController, GripInformation, bWasSocketed);
 }
 
 
@@ -84,12 +90,21 @@ void ASlotableActor::Server_GripRelease_Implementation(UGripMotionControllerComp
 		unsubscribeFromOccupiedEvent(currentNearestSlot);
 		currentGripState = EItemGripState::slotted;
 
-		currentNearestSlot->ReceiveActor(this);
+		if (HasAuthority())
+			currentNearestSlot->ReceiveActorInstigator(this);
 
 		current_ResidingSlot = currentNearestSlot;
 	}
 	else
+	{
+		DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
 		currentGripState = EItemGripState::loose;
+		rootAsPrimitiveComponent = Cast<UPrimitiveComponent>(GetRootComponent());
+		rootAsPrimitiveComponent->SetSimulatePhysics(true);
+		rootAsPrimitiveComponent->SetCollisionProfileName("BlockAllDynamic");
+		rootAsPrimitiveComponent->SetCollisionResponseToChannel(ECollisionChannel::ECC_GameTraceChannel1, ECollisionResponse::ECR_Overlap);
+	}
+
 
 	reset_GrippingParameters();
 }
@@ -132,13 +147,12 @@ void ASlotableActor::refreshNearestSlot_Implementation()
 			unsubscribeFromOccupiedEvent(currentNearestSlot);
 			unsubscribeFromAvailableEvent(currentNearestSlot);
 
-			currentNearestSlot->ActorOutOfRangeEvent(this);
+			currentNearestSlot->ActorOutOfRangeEventInstigation(this);
 		}
 
 		if (newNearest != nullptr)
 		{
-			if (HasAuthority())
-				newNearest->ReserveForActor(this, handSide);
+			newNearest->ReserveForActor_Server(this, handSide);
 		}
 		currentNearestSlot = newNearest;
 	}
@@ -190,23 +204,28 @@ void ASlotableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 void ASlotableActor::checkForSlotOnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	if (currentGripState != EItemGripState::gripped) { return; }
+
 	UItemSlot* overlappingSlot;
 	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
 
 	if (overlappingSlot != nullptr)
 	{
-		if (currentGripState == EItemGripState::gripped)
-		{
-			if (overlappingSlot->CheckForCompatibility(this))
-				if (overlappingSlot->SlotState() == EItemSlotState::available)
-					addSlotToList(overlappingSlot, false);
-				else
-					subscribeToSlotAvailableEvent(overlappingSlot);
-		}
+		if (overlappingSlot->CheckForCompatibility(this))
+			if (overlappingSlot->SlotState() == EItemSlotState::available)
+				addSlotToList(overlappingSlot, false);
+			else
+				subscribeToSlotAvailableEvent(overlappingSlot);
 	}
 }
 
 void ASlotableActor::checkForSlotOnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+{
+	if (currentGripState != EItemGripState::gripped) { return; }
+	checkForSlotOnOverlapEndServer(OtherComp);
+}
+
+void ASlotableActor::checkForSlotOnOverlapEndServer_Implementation(UPrimitiveComponent* OtherComp)
 {
 	UItemSlot* overlappingSlot;
 	overlappingSlot = Cast<UItemSlot>(OtherComp->GetAttachParent());
@@ -214,7 +233,9 @@ void ASlotableActor::checkForSlotOnOverlapEnd(UPrimitiveComponent* OverlappedCom
 	if (overlappingSlot != nullptr)
 	{
 		if (overlappingSlot->CheckForCompatibility(this))
+		{
 			removeSlotFromList(overlappingSlot);
+		}
 	}
 }
 
