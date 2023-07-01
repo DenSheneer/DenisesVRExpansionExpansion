@@ -68,9 +68,12 @@ private:
 
 
 	//	availability events
-	FDelegateHandle OccupiedEventHandle;
+	//FDelegateHandle OccupiedEventHandle;
+	//TMap<UItemSlot*, FDelegateHandle> AvailableEventHandles;
 
-	TMap<UItemSlot*, FDelegateHandle> AvailableEventHandles;
+	TArray<UItemSlot*> becomeAvailableSlots;
+	TArray<UItemSlot*> becomeOccupiedSlots;
+
 	void subscribeToSlotOccupiedEvent(UItemSlot* slot);
 	void unsubscribeFromOccupiedEvent(UItemSlot* slot);
 	void subscribeToSlotAvailableEvent(UItemSlot* slot);
