@@ -152,6 +152,7 @@ void ASlotableActor::refreshNearestSlot_Implementation()
 
 		if (newNearest != nullptr)
 		{
+			UE_LOG(LogTemp, Warning, TEXT("%s: reserving"), *GetName());
 			newNearest->ReserveForActor_Server(this, handSide);
 		}
 		currentNearestSlot = newNearest;
@@ -244,13 +245,13 @@ void ASlotableActor::removeSlotFromList(UItemSlot* slotToRemove)
 	if (slotToRemove != nullptr)
 	{
 		if (currentlyAvailable_Slots.Contains(slotToRemove))
-		{
 			currentlyAvailable_Slots.Remove(slotToRemove);
-		}
-		if (AvailableEventHandles.Contains(slotToRemove))
-		{
+
+		if (becomeAvailableSlots.Contains(slotToRemove))
 			unsubscribeFromAvailableEvent(slotToRemove);
-		}
+
+		if (becomeOccupiedSlots.Contains(slotToRemove))
+			unsubscribeFromOccupiedEvent(slotToRemove);
 
 		if (!HasAuthority()) { return; }
 		if (slotToRemove == currentNearestSlot)
@@ -278,60 +279,57 @@ void ASlotableActor::reset_GrippingParameters()
 	currentlyAvailable_Slots.Empty();
 	currentNearestSlot = nullptr;
 
-	TArray<UItemSlot*> keys;
-	for (const auto& Pair : AvailableEventHandles)
+	for (int32 Index = becomeAvailableSlots.Num() - 1; Index >= 0; --Index)
 	{
-		keys.Add(Pair.Key);
+		unsubscribeFromAvailableEvent(becomeAvailableSlots[Index]);
 	}
-	for (int32 Index = keys.Num() - 1; Index >= 0; --Index)
+	for (int32 Index = becomeOccupiedSlots.Num() - 1; Index >= 0; --Index)
 	{
-		unsubscribeFromAvailableEvent(keys[Index]);
+		unsubscribeFromOccupiedEvent(becomeOccupiedSlots[Index]);
 	}
-	AvailableEventHandles.Empty();
 }
 
 void ASlotableActor::subscribeToSlotOccupiedEvent(UItemSlot* slot)
 {
-	OccupiedEventHandle = slot->OnOccupiedEvent.AddLambda([this](UItemSlot* pSlot)
+	if (becomeOccupiedSlots.Contains(slot)) { return; }
+	becomeOccupiedSlots.Add(slot);
+
+	slot->OnOccupied.BindLambda([this](UItemSlot* pSlot)
 		{
 			this->removeSlotFromList(pSlot);
-
-			auto handle = AvailableEventHandles[pSlot];
-			if (handle.IsValid())
-				pSlot->OnAvailableEvent.Remove(handle);
-
 			unsubscribeFromOccupiedEvent(pSlot);
+			subscribeToSlotAvailableEvent(pSlot);
 		}
 	);
 }
 
 void ASlotableActor::unsubscribeFromOccupiedEvent(UItemSlot* slot)
 {
-	if (slot != nullptr)
-	{
-		if (slot->OnOccupiedEvent.Remove(OccupiedEventHandle))
-			OccupiedEventHandle.Reset();
-	}
+	if (!slot) { return; }
+	if (!becomeOccupiedSlots.Contains(slot)) { return; }
+	becomeOccupiedSlots.Remove(slot);
+
+	slot->OnOccupied.Unbind();
 }
 void ASlotableActor::subscribeToSlotAvailableEvent(UItemSlot* slot)
 {
-	AvailableEventHandles.Add(slot, slot->OnAvailableEvent.AddLambda([&](UItemSlot* pSlot)
-		{
-			if (!pSlot || !this) return;
+	if (becomeAvailableSlots.Contains(slot)) { return; }
+	becomeAvailableSlots.Add(slot);
 
-			this->unsubscribeFromAvailableEvent(pSlot);
-			this->addSlotToList(pSlot);
+	slot->OnAvailable.BindLambda([this](UItemSlot* pSlot)
+		{
+			addSlotToList(pSlot);
+			unsubscribeFromAvailableEvent(pSlot);
 		}
-	));
+	);
+
+	UE_LOG(LogTemp, Warning, TEXT("%s: Subbed"), *GetName());
 }
 void ASlotableActor::unsubscribeFromAvailableEvent(UItemSlot* slot)
 {
 	if (!slot) { return; }
-	if (!AvailableEventHandles.Contains(slot)) { return; }
-
-	auto handle = AvailableEventHandles[slot];
-	if (!handle.IsValid()) { return; }
-
-	slot->OnAvailableEvent.Remove(handle);
-	AvailableEventHandles.Remove(slot);
+	if (!becomeAvailableSlots.Contains(slot)) { return; }
+	becomeAvailableSlots.Remove(slot);
+	slot->OnAvailable.Unbind();
+	UE_LOG(LogTemp, Warning, TEXT("%s: Unsubbed"), *GetName());
 }

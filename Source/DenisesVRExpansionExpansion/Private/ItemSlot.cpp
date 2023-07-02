@@ -150,6 +150,7 @@ void UItemSlot::ReserveForActor_Server_Implementation(ASlotableActor* actor, con
 		}
 		reservedForActor = actor;
 		currentState = EItemSlotState::reserved;
+		OnOccupied.ExecuteIfBound(this);
 	}
 }
 void UItemSlot::SetClientVisualsOnReserve_Implementation(ASlotableActor* actor, const EControllerHand handSide)
@@ -201,7 +202,6 @@ void UItemSlot::ReceiveActorInstigator_Implementation(ASlotableActor* actor)
 
 		reservedForActor = nullptr;
 		currentState = EItemSlotState::occupied;
-		OnOccupiedEvent.Broadcast(this);
 
 		SetVisualsOn_ActorReceive(actor);
 
@@ -223,7 +223,7 @@ void UItemSlot::SetVisualsOn_ActorReceive_Implementation(ASlotableActor* actor)
 
 	reservedForActor = nullptr;
 	currentState = EItemSlotState::occupied;
-	OnOccupiedEvent.Broadcast(this);
+	//OnOccupiedEvent.Broadcast(this);
 
 	ReceiveActor();
 }
@@ -236,7 +236,8 @@ void UItemSlot::RemoveSlotableActor(ASlotableActor* actor)
 {
 	actor->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
 	currentState = EItemSlotState::available;
-	OnAvailableEvent.Broadcast(this);
+	OnAvailable.ExecuteIfBound(this);
+	//OnAvailableEvent.Broadcast(this);
 }
 
 void UItemSlot::setupTriggerComponent_Implementation()
@@ -281,7 +282,6 @@ void UItemSlot::setupTriggerComponent_Implementation()
 		colliderComponent->bHiddenInGame = false;
 		colliderComponent->SetUsingAbsoluteScale(true);
 		colliderComponent->SetWorldScale3D(triggerVisuals.Scale);
-		//colliderComponent->SetIsReplicated(true);
 		colliderComponent->SetVisibility(false);
 	}
 }
@@ -317,9 +317,9 @@ void UItemSlot::ActorOutOfRangeEventMulti_Implementation(ASlotableActor* actor)
 	{
 		currentState = EItemSlotState::available;
 		reservedForActor = nullptr;
-		OnAvailableEvent.Broadcast(this);
-
 		ActorOutOfRangeEvent(actor);
+		OnAvailable.ExecuteIfBound(this);
+
 	}
 }
 void UItemSlot::ActorOutOfRangeEvent_Implementation(ASlotableActor* actor)
@@ -537,8 +537,6 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(UItemSlot, currentState);
 	DOREPLIFETIME(UItemSlot, reservedForActor);
 	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
-	//DOREPLIFETIME(UItemSlot, visualsComponent);
-	//DOREPLIFETIME(UItemSlot, colliderComponent);
 }
 
 void UItemSlot::addActorToVisualsMap(TSubclassOf<class ASlotableActor> newActor)
