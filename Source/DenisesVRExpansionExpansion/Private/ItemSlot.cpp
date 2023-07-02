@@ -282,7 +282,7 @@ void UItemSlot::setupTriggerComponent_Implementation()
 		colliderComponent->bHiddenInGame = false;
 		colliderComponent->SetUsingAbsoluteScale(true);
 		colliderComponent->SetWorldScale3D(triggerVisuals.Scale);
-		colliderComponent->SetVisibility(true);
+		colliderComponent->SetVisibility(false);
 	}
 }
 
@@ -537,8 +537,6 @@ void UItemSlot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME(UItemSlot, currentState);
 	DOREPLIFETIME(UItemSlot, reservedForActor);
 	DOREPLIFETIME(UItemSlot, currentlyDisplayedVisuals);
-	//DOREPLIFETIME(UItemSlot, visualsComponent);
-	//DOREPLIFETIME(UItemSlot, colliderComponent);
 }
 
 void UItemSlot::addActorToVisualsMap(TSubclassOf<class ASlotableActor> newActor)

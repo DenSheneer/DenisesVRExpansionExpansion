@@ -146,16 +146,12 @@ public:
 	// Function that is called on the server when an actor exits this components's collision.
 	UFUNCTION(Server, Reliable)			void ActorOutOfRangeEventInstigation(ASlotableActor* actor);
 
-	////	Event an an ASlotableActor could subscribe to get notified when this slot became occupied.
-	//DECLARE_EVENT_OneParam(UItemSlot, FSlotOccupiedEvent, UItemSlot*)	FSlotOccupiedEvent& OnOccupied(ASlotableActor*, UItemSlot*) { return OnOccupiedEvent; }
-	//FSlotOccupiedEvent OnOccupiedEvent;
-
-	////	Event an an ASlotableActor could subscribe to get notified when this slot became available again.
-	//DECLARE_EVENT_OneParam(UItemSlot, FSlotAvailableEvent, UItemSlot*)	FSlotAvailableEvent& OnIsAvailable(UItemSlot*) { return OnAvailableEvent; }
-	//FSlotAvailableEvent OnAvailableEvent;
-
+	//	Event an an ASlotableActor could subscribe to get notified when this slot became occupied.
 	FOnOccupiedDelegate OnOccupied;
+
+	//	Event an an ASlotableActor could subscribe to get notified when this slot became available again.
 	FOnAvailableDelegate OnAvailable;
+
 
 	//	Array that hold static subclasses of ASlotableActor that this slot should accept.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
