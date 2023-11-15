@@ -1,3 +1,4 @@
+#if WITH_EDITOR
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
@@ -24,3 +25,4 @@ void ItemSlotDetailsModule::ShutdownModule()
         PropertyModule.UnregisterCustomClassLayout("ItemSlot");
     }
 }
+#endif

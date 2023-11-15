@@ -1,5 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
+#if WITH_EDITOR
 #include "ItemSlotDetails.h"
 #include "IDetailGroup.h"
 #include "SlotableActor.h"
@@ -331,3 +331,4 @@ void ItemSlotDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
 			reloadButton
 		];
 }
+#endif

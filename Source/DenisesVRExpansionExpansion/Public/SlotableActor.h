@@ -23,7 +23,7 @@ class ASlotableActor : public AGrippableActor
 public:
 	ASlotableActor(const FObjectInitializer& ObjectInitializer);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Static values", meta = (DisplayName = "Preview Mesh", MakeStructureDefaultValue = "C:/Program Files/Epic Games/UE_5.1/Engine/Content/BasicShapes/Cube.uasset"))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Static values", meta = (DisplayName = "Preview Mesh", MakeStructureDefaultValue = ""))
 		TObjectPtr<UStaticMesh> PreviewMesh;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Static values", meta = (DisplayName = "Scale", MakeStructureDefaultValue = "1.000000,1.000000,1.000000"))
 		FVector MeshScale;
