@@ -1,7 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
+#if WITH_EDITOR
 #pragma once
-
 #include "CoreMinimal.h"
 #include "IDetailCustomization.h"
 #include "DetailCategoryBuilder.h"
@@ -17,3 +16,4 @@ public:
 	static TSharedRef<IDetailCustomization> MakeInstance();
 	virtual void CustomizeDetails(IDetailLayoutBuilder& detailLayout) override;
 };
+#endif

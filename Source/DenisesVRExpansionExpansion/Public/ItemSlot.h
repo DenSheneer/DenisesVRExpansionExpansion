@@ -2,20 +2,26 @@
 
 #pragma once
 
+#if WITH_EDITOR
+#include "DetailCategoryBuilder.h"
+#endif
+
 #include "CoreMinimal.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "SlotableActorVisuals.h"
 #include "ItemSlotState.h"
-#include "DetailCategoryBuilder.h"
 #include "CollisionShape.h"
 #include "ItemSlot.generated.h"
+
+class ASlotableActor;
 
 DECLARE_DELEGATE_OneParam(FOnOccupiedDelegate, UItemSlot*);
 DECLARE_DELEGATE_OneParam(FOnAvailableDelegate, UItemSlot*);
 
-class ASlotableActor;
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnActorReceivedEvent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnActorExitEvent);
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent), Blueprintable)
 class UItemSlot : public UStaticMeshComponent
@@ -30,12 +36,12 @@ protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
-		TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> actorVisuals_Map;
+	TMap<TSubclassOf<class ASlotableActor>, FSlotableActorVisuals> actorVisuals_Map;
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)	UStaticMesh* boxMesh;
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)	UStaticMesh* sphereMesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)					uint8 editorCollisionShape = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)					uint8 editorCollisionShape = 1;	//sphere
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite)		FSlotableActorVisuals triggerVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals rootVisuals;
 	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadWrite)	FSlotableActorVisuals currentlyDisplayedVisuals;
@@ -48,16 +54,15 @@ protected:
 	UPROPERTY()	UShapeComponent* colliderComponent;
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "2"))
-		UMaterial* leftHandMaterial;
+	UMaterial* leftHandMaterial;
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "3"))
-		UMaterial* rightHandMaterial;
+	UMaterial* rightHandMaterial;
 
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "4"))
-		UMaterial* editorColliderMaterial;
+	UMaterial* editorColliderMaterial;
 
 public:
-#pragma region Editor Functions
 	/**
 	* Editor-time function.
 	Toggles current visual's visibility.
@@ -70,6 +75,15 @@ public:
 	*/
 	void E_SetVisibility(bool hidden);
 
+	/**
+	* Editor-time function.
+	* Displays the provided FSlotableActorVisuals.
+	* NOTE: This is the EDITOR version of this method. For runtime, use the RUNTIME version of this method.
+	@param FSlotableActorVisuals visuals: Visuals to display. Sets mesh and transform.
+	*/
+	void E_SetPreviewVisuals(const FSlotableActorVisuals visuals);
+
+#if WITH_EDITOR
 	/**
 	* Editor-time function.
 	Iterates through acceptedActors array and loads default visuals from the acceptedActor's static class.
@@ -96,13 +110,6 @@ public:
 	*/
 	void E_ModifyAcceptedActorMesh(TSubclassOf<class ASlotableActor> actorToModify_Key);
 
-	/**
-	* Editor-time function.
-	* Displays the provided FSlotableActorVisuals.
-	* NOTE: This is the EDITOR version of this method. For runtime, use the RUNTIME version of this method.
-	@param FSlotableActorVisuals visuals: Visuals to display. Sets mesh and transform.
-	*/
-	void E_SetPreviewVisuals(const FSlotableActorVisuals visuals);
 
 	/**
 	* Editor-time function.
@@ -124,21 +131,26 @@ public:
 	*/
 	void E_SetTriggerShape(const ECollisionShape::Type shapeType);
 
-#if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
 	virtual void PostEditComponentMove(bool bFinished) override;
-#endif
-#pragma endregion
 
-#pragma region Runtime Functions
+	void SaveEdit();
+	void SaveRootTransform();
+	void SaveMeshTransform();
+	void SaveTriggerTransform();
+#endif
+
+	UPROPERTY(BlueprintAssignable, Category = "ItemSlot")
+	FOnActorReceivedEvent OnActorReceivedEvent;
+
+	UPROPERTY(BlueprintAssignable, Category = "ItemSlot")
+	FOnActorExitEvent OnActorExitEvent;
 
 	UFUNCTION(Server, Reliable)			void ReserveForActor_Server(ASlotableActor* actor, const EControllerHand handSide);
 	UFUNCTION(Server, Reliable)			void ReceiveActorInstigator(ASlotableActor* actor);
 
-
 	bool CheckForCompatibility(const ASlotableActor* actor);
-
 	void RemoveSlotableActor(ASlotableActor* actor);
 	const EItemSlotState SlotState() { return currentState; }
 
@@ -155,9 +167,7 @@ public:
 
 	//	Array that hold static subclasses of ASlotableActor that this slot should accept.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Slot editing", meta = (DisplayPriority = "1"))
-		TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
-
-#pragma endregion
+	TArray<TSubclassOf<class ASlotableActor>> acceptedActors;
 
 private:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -178,14 +188,14 @@ private:
 	 * Collision detection happens on the server only.
 	 */
 	UFUNCTION(Server, Reliable)
-		void setupTriggerComponent();
+	void setupTriggerComponent();
 
 	/**
 	 * visualsComponent needs to be set up locally in order to work.
 	 * It is not replicated.
 	 */
 	UFUNCTION(Client, Reliable)
-		void setupVisualsComponent();
+	void setupVisualsComponent();
 
 	// Multicast function that is called by the server to notify clients.
 	UFUNCTION(NetMulticast, Reliable)	void ActorOutOfRangeEventMulti(ASlotableActor* actor);
@@ -197,9 +207,4 @@ private:
 	UFUNCTION(Client, Reliable)			void SetVisuals(const FSlotableActorVisuals visualProperties, const EControllerHand handSide);
 	UFUNCTION(NetMulticast, Reliable)	void SetVisualsOn_ActorReceive(ASlotableActor* actor);
 	UFUNCTION(Client, Reliable)			void ReceiveActor();
-
-	void SaveEdit();
-	void SaveRootTransform();
-	void SaveMeshTransform();
-	void SaveTriggerTransform();
 };
